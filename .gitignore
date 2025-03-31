@@ -2,5 +2,7 @@
 .Rhistory
 .RData
 .Ruserdata
-data
+data/
 support-ac.Rproj
+python\__pycache__
+python\*.pdf

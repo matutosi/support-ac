@@ -8,4 +8,5 @@ support-ac.Rproj
 2領収書.py
 __pycache__/
 *.png
+!stamp.png
 *.pdf

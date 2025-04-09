@@ -4,5 +4,8 @@
 .Ruserdata
 data/
 support-ac.Rproj
-python\__pycache__
-python\*.pdf
+1名札.py
+2領収書.py
+__pycache__/
+*.png
+*.pdf

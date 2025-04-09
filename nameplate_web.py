@@ -6,9 +6,6 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
 # import custom modules
-WD = Path(__file__).parent
-if WD not in sys.path:
-    sys.path.append(str(WD))
 from nameplate import create_named_nameplate, create_empty_nameplate
 from convert_pdf_to_png import convert_pdf_to_png
 

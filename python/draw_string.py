@@ -40,16 +40,17 @@ if __name__ == '__main__':
 
     # フォント登録
     # 源真ゴシック（ http://jikasei.me/font/genshin/）
+    font_name = 'GenShinGothic'
     GEN_SHIN_GOTHIC_MEDIUM_TTF = "./GenShinGothic-Monospace-Medium.ttf"
-    pdfmetrics.registerFont(TTFont('GenShinGothic', GEN_SHIN_GOTHIC_MEDIUM_TTF))
+    pdfmetrics.registerFont(TTFont(font_name, GEN_SHIN_GOTHIC_MEDIUM_TTF))
 
-    path_file = "a.pdf"
+    path_file = "output.pdf"
 
     p = canvas.Canvas(path_file, pagesize=A4)
 
     x=10
     y=100
-    str="あ"
+    str="文字列の例"
     draw_string(p, x, y, str)
 
     x=10

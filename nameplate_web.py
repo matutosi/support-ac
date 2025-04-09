@@ -60,8 +60,8 @@ if path_input:
 
     with col1:
         st.image(path_named_png, "事前申込(p1)")
-        st.download_button('ダウンロード', open(path_named_plate, 'br'), path_named_plate)
+        st.download_button('PDFのダウンロード', open(path_named_plate, 'br'), path_named_plate)
 
     with col2:
         st.image(path_empty_png, "当日用")
-        st.download_button('ダウンロード', open(path_empty_plate, 'br'), path_empty_plate)
+        st.download_button('PDFのダウンロード', open(path_empty_plate, 'br'), path_empty_plate)

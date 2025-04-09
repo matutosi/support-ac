@@ -1,3 +1,5 @@
 1名札.py
 2領収書.py
 __pycache__/
+*.png
+*.pdf

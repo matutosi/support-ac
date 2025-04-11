@@ -88,10 +88,10 @@ def create_named_nameplate(path_input, path_named_plate, congress_color, CONSTAN
     p.save()
 
 
-def create_empty_nameplate(path_empty_plate, congress_color, CONSTANT_STRINGS, font_name, n_sheet=2):
+def create_empty_nameplate(path_empty_plate, congress_color, CONSTANT_STRINGS, font_name, n_sheet=1):
     """
     当日用の空白名札
-    n_sheet = 2 # 必要なシート数: 1シートあたり10枚印刷
+    n_sheet # 必要なシート数: 1シートあたり10枚印刷
     """
     p = canvas.Canvas(path_empty_plate, pagesize=A4)
     for i in range(n_sheet * 10): # i: 全体での番号
@@ -128,7 +128,7 @@ if __name__ == "__main__":
     SIMEI         = "氏名"
     CONSTANT_STRINGS = (CONGRESS, CONG_DATE, COMMITTEE, COMMITTEE_SUB, PLACE, SHOZOKU, SIMEI)
 
-    ### データ
+    ### 入力データ
     path_input = "名簿・領収書.xlsx"
 
     ### 出力ファイル名

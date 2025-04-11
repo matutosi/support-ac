@@ -1,5 +1,6 @@
 import os
 
+import streamlit as st
 import pandas as pd
 from PIL import Image # pillow
 from reportlab.pdfgen import canvas
@@ -7,6 +8,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.lib.units import mm
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfbase.ttfonts import TTFont
+from image import read_bz2
 
 from draw_string import draw_string
 
@@ -71,12 +73,38 @@ loc = [[ 14*mm, 286*mm], # 参加費
        [ 14*mm, 146*mm]  # 研修会費
     ]
 
-def create_named_receipt(path_input, path_named_reciept, CONSTANT_STRINGS, font_name, img=None):
+# 備考の位置
+LOC_FOOTER_1 = [
+    [ 10 * mm, 47 * mm], 
+    [ 15 * mm, 42 * mm], 
+    [ 15 * mm, 37 * mm], 
+    [ 15 * mm, 32 * mm], 
+    [ 15 * mm, 27 * mm], 
+    [ 15 * mm, 22 * mm], 
+    [ 15 * mm, 17 * mm],
+    [ 15 * mm, 12 * mm]
+]
+
+# 事務局住所の位置
+LOC_FOOTER_2 = [
+    [125 * mm, 47 * mm], 
+    [130 * mm, 42 * mm], 
+    [130 * mm, 37 * mm], 
+    [130 * mm, 32 * mm], 
+    [130 * mm, 27 * mm], 
+    [130 * mm, 22 * mm], 
+    [130 * mm, 17 * mm],
+    [130 * mm, 12 * mm]
+    ]
+
+def create_named_receipt(path_input, path_named_receipt, CONSTANT_STRINGS, font_name, img=None):
     """
     事前申込者の領収書の作成
     """
     df = pd.read_excel(path_input)
-    p = canvas.Canvas(path_named_reciept, pagesize=A4)
+    p = canvas.Canvas(path_named_receipt, pagesize=A4)
+    FOOTER_1      = CONSTANT_STRINGS[5]
+    FOOTER_2      = CONSTANT_STRINGS[6]
     for value in df.iterrows():
         name     = value[1].iloc[0] # 氏名
         for j, n in enumerate([3,4,5]):
@@ -95,6 +123,8 @@ def create_empty_receipt(path_empty_plate, CONSTANT_STRINGS, font_name):
     """
     当日参加者の領収書の作成
     """
+    FOOTER_1      = CONSTANT_STRINGS[5]
+    FOOTER_2      = CONSTANT_STRINGS[6]
     p = canvas.Canvas(path_empty_plate, pagesize=A4)
     name     = "                "
     amount   = "￥              "
@@ -115,7 +145,7 @@ if __name__ == "__main__":
     GEN_SHIN_GOTHIC_MEDIUM_TTF = "./GenShinGothic-Monospace-Medium.ttf"
     pdfmetrics.registerFont(TTFont(font_name, GEN_SHIN_GOTHIC_MEDIUM_TTF))
 
-    # img = image.read_bz2("stamp.bz2", "stamp.bz2.txt")
+    # img = read_bz2("stamp.bz2", "stamp.bz2.txt")
     img = "stamp.png"
 
     ### 大会情報
@@ -124,8 +154,6 @@ if __name__ == "__main__":
     COMMITTEE_SUB = "支援学会大会支援委員会"
     PRESIDENT     = "会長 支援 太郎"
     RECEIPT_DATE  = "2025年10月10日"
-    CONSTANT_STRINGS = (TITLE, CONGRESS, COMMITTEE_SUB, PRESIDENT, RECEIPT_DATE)
-
     ### 註釈
     FOOTER_1 = [
         "領収書について",
@@ -136,17 +164,6 @@ if __name__ == "__main__":
         "本学会は免税事業者で，適格請求書発行事業者の登録を",
         "しておらず，領収書には登録番号を記載していません．"
         ]
-
-    LOC_FOOTER_1 = [
-        [ 10 * mm, 47 * mm], 
-        [ 15 * mm, 42 * mm], 
-        [ 15 * mm, 37 * mm], 
-        [ 15 * mm, 32 * mm], 
-        [ 15 * mm, 27 * mm], 
-        [ 15 * mm, 22 * mm], 
-        [ 15 * mm, 17 * mm]
-        ]
-
     FOOTER_2 = [
         "学会事務局",
         "〒100-0000" ,
@@ -156,29 +173,21 @@ if __name__ == "__main__":
         "FAX: 03-0000-0000",
         "E-mail: shien@info.com"
         ]
+    CONSTANT_STRINGS = (TITLE, CONGRESS, COMMITTEE_SUB, PRESIDENT, RECEIPT_DATE, FOOTER_1, FOOTER_2)
 
-    LOC_FOOTER_2 = [
-        [120 * mm, 47 * mm], 
-        [130 * mm, 42 * mm], 
-        [130 * mm, 37 * mm], 
-        [130 * mm, 32 * mm], 
-        [130 * mm, 27 * mm], 
-        [130 * mm, 22 * mm], 
-        [130 * mm, 17 * mm]
-        ]
 
     ### 入力データ
     path_input = "名簿・領収書.xlsx"
 
     ### 出力ファイル名
-    path_named_reciept = "reciept.pdf"
-    path_empty_reciept = "reciept_empty.pdf"
+    path_named_receipt = "receipt.pdf"
+    path_empty_receipt = "receipt_empty.pdf"
 
 
     ############ 設定箇所おわり ############
 
-    create_named_receipt(path_input, path_named_reciept, CONSTANT_STRINGS, font_name, img=img)
-    create_empty_receipt(path_empty_reciept, CONSTANT_STRINGS, font_name)
+    create_named_receipt(path_input, path_named_receipt, CONSTANT_STRINGS, font_name, img=img)
+    create_empty_receipt(path_empty_receipt, CONSTANT_STRINGS, font_name)
 
-    os.startfile(path_named_reciept)
-    os.startfile(path_empty_reciept)
+    os.startfile(path_named_receipt)
+    os.startfile(path_empty_receipt)

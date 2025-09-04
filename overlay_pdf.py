@@ -39,8 +39,8 @@ def create_number_pages(path_pdf, pagesize=A4, start=1, end=1, pre="- ", post=" 
     c.save()
 
 def overlay_pdf(background_path, overlay_path, output_path):
-    background_doc = fitz.open(background_path)
-    overlay_doc = fitz.open(overlay_path)
+    background_doc = fitz.open(stream = background_path.read(), filetype = "pdf")
+    overlay_doc = fitz.open(stream = overlay_path.read(), filetype = "pdf")
     for background_page, overlay_page in zip(background_doc, overlay_doc):
         background_page.show_pdf_page(background_page.rect, overlay_doc, overlay_page.number)
     background_doc.save(output_path)

@@ -12,31 +12,46 @@ def create_session_number(c, x, y, str, font_name=None, font_size=None):
             c.setFont(font_name, font_size)
     c.drawString(x * mm, y * mm, str)
 
-def create_session_numbers(path_pdf, pagesize=A4, start=1, end=1, pre="A", post="", x=20, y=20, font_name=None, font_size=30):
+def create_session_numbers(path_pdf, pagesize=A4, start=1, end=1, pre="A", post="", x=20, y=20, font_name=None, font_size=30, bleed=3):
+    if bleed:
+        x = x + bleed
+        y = y + bleed
+        pagesize = add_bleed(pagesize, bleed=[bleed * mm, bleed * mm])
+        print(f'{pagesize=}')   # for debug
+        print(f'{x=}')          # for debug
     c = canvas.Canvas(path_pdf, pagesize=pagesize)
     y = (pagesize[1] / mm) - y
     for i in range(start, end + 1):
         str = f'{pre}{i:02}{post}'
-        create_number_page(c, x, y, str, font_name, font_size)
+        create_session_number(c, x, y, str, font_name, font_size)
         c.showPage()
     c.save()
 
-def create_number_page(c, x, y, str, font_name=None, font_size=None):
+def create_page_number(c, x, y, str, font_name=None, font_size=None):
     if font_size:
         c.setFontSize(font_size)
         if font_name:
             c.setFont(font_name, font_size)
     c.drawCentredString(x * mm, y * mm, str)
 
-def create_number_pages(path_pdf, pagesize=A4, start=1, end=1, pre="- ", post=" -", x=None, y=10, font_name=None, font_size=None):
+def create_page_numbers(path_pdf, pagesize=A4, start=1, end=1, pre="- ", post=" -", x=None, y=10, font_name=None, font_size=None, bleed=3):
+    if bleed:
+        y = y + bleed
+        pagesize = add_bleed(pagesize, bleed=[bleed * mm, bleed * mm])
     c = canvas.Canvas(path_pdf, pagesize=pagesize)
     if x is None:
         x = (pagesize[0]/ 2) / mm # Centering the text horizontally
+        # print(f'{pagesize=}')   # for debug
+        # print(f'{x=}')          # for debug
     for i in range(start, end + 1):
         str = f'{pre}{i}{post}'
-        create_number_page(c, x, y, str, font_name, font_size)
+        create_page_number(c, x, y, str, font_name, font_size)
         c.showPage()
     c.save()
+
+def add_bleed(pagesize, bleed=[3 * mm, 3 * mm]):
+    res = [x + y*2 for x, y in zip(pagesize, bleed)] # *2: both ends
+    return res
 
 def overlay_pdf(background_path, overlay_path, output_path):
     background_doc = fitz.open(stream = background_path.read(), filetype = "pdf")
@@ -61,8 +76,8 @@ if __name__ == "__main__":
     pagesize = A4
     y = 10  # Y coordinate in mm
     font_size = 12  # Font size
-    # create_number_pages(path_pdf, pagesize=A4, start=1, end=1, pre="- ", post=" -", x=None, y=10, font_name=None, font_size=None):
-    create_number_pages(path_pagenumbers, pagesize, start=1, end=100, y=y, font_size=font_size)
+    # create_page_numbers(path_pdf, pagesize=A4, start=1, end=1, pre="- ", post=" -", x=None, y=10, font_name=None, font_size=None):
+    create_page_numbers(path_pagenumbers, pagesize, start=1, end=100, y=y, font_size=font_size)
 
     # session numbers
     path_session_a = "session_a.pdf"

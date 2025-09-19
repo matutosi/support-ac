@@ -4,6 +4,11 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
+from reportlab.lib.colors import white
+
+font_gen_shin = "GenShinGothic"
+GEN_SHIN_GOTHIC_MEDIUM_TTF = "./GenShinGothic-Monospace-Medium.ttf"
+pdfmetrics.registerFont(TTFont(font_gen_shin, GEN_SHIN_GOTHIC_MEDIUM_TTF))
 
 def create_session_number(c, x, y, str, font_name=None, font_size=None):
     if font_size:
@@ -13,12 +18,12 @@ def create_session_number(c, x, y, str, font_name=None, font_size=None):
     c.drawString(x * mm, y * mm, str)
 
 def create_session_numbers(path_pdf, pagesize=A4, start=1, end=1, pre="A", post="", x=20, y=20, font_name=None, font_size=30, bleed=3):
+    if not font_name:
+        font_name = font_gen_shin
     if bleed:
         x = x + bleed
         y = y + bleed
         pagesize = add_bleed(pagesize, bleed=[bleed * mm, bleed * mm])
-        print(f'{pagesize=}')   # for debug
-        print(f'{x=}')          # for debug
     c = canvas.Canvas(path_pdf, pagesize=pagesize)
     y = (pagesize[1] / mm) - y
     for i in range(start, end + 1):
@@ -35,19 +40,40 @@ def create_page_number(c, x, y, str, font_name=None, font_size=None):
     c.drawCentredString(x * mm, y * mm, str)
 
 def create_page_numbers(path_pdf, pagesize=A4, start=1, end=1, pre="- ", post=" -", x=None, y=10, font_name=None, font_size=None, bleed=3):
+    if not font_name:
+        font_name = font_gen_shin
     if bleed:
         y = y + bleed
         pagesize = add_bleed(pagesize, bleed=[bleed * mm, bleed * mm])
-    c = canvas.Canvas(path_pdf, pagesize=pagesize)
     if x is None:
         x = (pagesize[0]/ 2) / mm # Centering the text horizontally
-        # print(f'{pagesize=}')   # for debug
-        # print(f'{x=}')          # for debug
+    c = canvas.Canvas(path_pdf, pagesize=pagesize)
     for i in range(start, end + 1):
         str = f'{pre}{i}{post}'
         create_page_number(c, x, y, str, font_name, font_size)
         c.showPage()
     c.save()
+
+def create_division(path_pdf, pagesize=A4, str="", x=None, y=10, height=40, font_name=None, font_size=None, bleed=3):
+    if not font_name:
+        font_name = font_gen_shin
+    if bleed:
+        y = y + bleed
+        pagesize = add_bleed(pagesize, bleed=[bleed * mm, bleed * mm])
+    y = (pagesize[1] / mm) - (y + height)
+    if x is None:
+        x = (pagesize[0]/ 2) / mm # Centering the text horizontally
+    c = canvas.Canvas(path_pdf, pagesize=pagesize)
+    if font_size:
+        c.setFontSize(font_size)
+        if font_name:
+            c.setFont(font_name, font_size)
+    c.rect(0, y * mm, pagesize[0], height * mm, fill=1)
+    c.setFillColor(white)
+    c.drawCentredString(x * mm, (y + height / 2) * mm - font_size * 0.4, str) # ほぼ上下中央
+    c.showPage()
+    c.save()
+
 
 def add_bleed(pagesize, bleed=[3 * mm, 3 * mm]):
     res = [x + y*2 for x, y in zip(pagesize, bleed)] # *2: both ends

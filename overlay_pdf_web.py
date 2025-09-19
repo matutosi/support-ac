@@ -2,7 +2,10 @@ import streamlit as st
 from reportlab.lib.pagesizes import A4, A3, A5
 from reportlab.lib.units import mm
 
-from overlay_pdf import create_page_numbers, create_session_numbers, overlay_pdf
+from overlay_pdf import create_page_numbers
+from overlay_pdf import create_session_numbers
+from overlay_pdf import create_division
+from overlay_pdf import overlay_pdf
 from convert_pdf_to_png import convert_pdf_to_png, add_border
 
 def overlay():
@@ -44,6 +47,16 @@ def create():
             session = st.text_input("セッション名", "A")
             x = st.number_input("左端からの距離(mm)", value=20, min_value=0, max_value=100, step=1)
             y = st.number_input("上からの距離(mm)", value=20, min_value=0, max_value=100, step=1)
+        if create_obj == "区切り":
+            font_size = st.slider("Font size", value=30, min_value=8, max_value=60, step=1)
+            division = st.text_input("区切り名", "区切り名")
+            centering_x = st.checkbox("横位置の中央揃え", value=True)
+            if centering_x:
+                x = None # width * 0.5 / mm 
+            else:
+                x = st.number_input("左端からの距離(mm)", value=10, min_value=0, max_value=100, step=1)
+            y = st.number_input("上からの距離(mm)", value=20, min_value=-3, max_value=300, step=1)
+            height = st.number_input("帯の幅(mm)", value=40, min_value=0, max_value=100, step=10)
         bleed = st.number_input("全体に余白追加(mm)", value=3, min_value=3, step=1)
 
     # create PDF, convert to PNG, and display
@@ -61,6 +74,13 @@ def create():
         add_border(path_session_numbers_png)
         st.download_button('PDFのダウンロード', open(path_session_numbers, 'br'), path_session_numbers)
         st.image(path_session_numbers_png)
+    if create_obj == "区切り":
+        path_division = "division.pdf"
+        create_division(path_division, pagesize, str=division, x=x, y=y, height=height, font_size=font_size, bleed=bleed)
+        path_division_png = convert_pdf_to_png(path_division)
+        add_border(path_division_png)
+        st.download_button('PDFのダウンロード', open(path_division, 'br'), path_division)
+        st.image(path_division_png)
 
 def home():
     st.sidebar.success("Select")

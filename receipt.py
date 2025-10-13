@@ -119,7 +119,7 @@ def create_named_receipt(path_input, path_named_receipt, CONSTANT_STRINGS, font_
     p.save()
 
 
-def create_empty_receipt(path_empty_plate, CONSTANT_STRINGS, font_name):
+def create_empty_receipt(path_empty_plate, CONSTANT_STRINGS, font_name, item_empty):
     """
     当日参加者の領収書の作成
     """
@@ -128,8 +128,13 @@ def create_empty_receipt(path_empty_plate, CONSTANT_STRINGS, font_name):
     p = canvas.Canvas(path_empty_plate, pagesize=A4)
     name     = "                "
     amount   = "￥              "
-    himoku   = "参加費"
-    draw_receit(p, loc[0], name, amount, himoku, CONSTANT_STRINGS, font_name, img=None)
+    himoku   = ["参加費", "懇親会参加費", "現地研修会参加費"]
+    if(himoku[0] in item_empty):
+        draw_receit(p, loc[0], name, amount, himoku[0], CONSTANT_STRINGS, font_name, img=None)
+    if(himoku[1] in item_empty):
+        draw_receit(p, loc[1], name, amount, himoku[1], CONSTANT_STRINGS, font_name, img=None)
+    if(himoku[2] in item_empty):
+        draw_receit(p, loc[2], name, amount, himoku[2], CONSTANT_STRINGS, font_name, img=None)
     draw_footer(p, LOC_FOOTER_1, FOOTER_1)
     draw_footer(p, LOC_FOOTER_2, FOOTER_2)
     p.showPage()

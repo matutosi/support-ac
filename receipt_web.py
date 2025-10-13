@@ -43,6 +43,9 @@ with settings:
     COMMITTEE_SUB = st.text_input("委員会"    , "支援学会大会支援委員会")
     PRESIDENT     = st.text_input("肩書・氏名", "会長 支援 太郎"        )
     RECEIPT_DATE  = st.text_input("年月日"    , "2025年10月10日"        )
+    item_empty    = st.multiselect("当日用の印刷項目",
+                                    options = ["参加費", "懇親会参加費", "現地研修会参加費"],
+                                    default = ["参加費"])
     FOOTER_1 = st.text_area(
         "備考",
         "領収書について\n"
@@ -91,7 +94,7 @@ with settings:
 
 if path_input:
     create_named_receipt(path_input, path_named_receipt, CONSTANT_STRINGS=CONSTANT_STRINGS, font_name=font_name, img=img)
-    create_empty_receipt(path_empty_receipt, CONSTANT_STRINGS=CONSTANT_STRINGS, font_name=font_name)
+    create_empty_receipt(path_empty_receipt, CONSTANT_STRINGS=CONSTANT_STRINGS, font_name=font_name, item_empty=item_empty)
 
     path_named_png = convert_pdf_to_png(path_named_receipt)
     path_empty_png = convert_pdf_to_png(path_empty_receipt)

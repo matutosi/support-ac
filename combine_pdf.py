@@ -13,8 +13,10 @@ def combine_pdfs(pdf_list, output="combined.pdf"):
 
     for pdf_file in pdf_list:
         try:
-            # source_pdf = fitz.open() # 通常のファイルのとき
-            source_pdf = fitz.open(stream = pdf_file.read(), filetype = "pdf") # streamlit用
+            if isinstance(uploaded_file, str):
+                source_pdf = fitz.open(pdf_file)
+            else: # streamlit
+                source_pdf = fitz.open(stream = pdf_file.read(), filetype = "pdf")
             output_pdf.insert_pdf(source_pdf)
             source_pdf.close()
         except fitz.FileNotFoundError:

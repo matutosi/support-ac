@@ -20,32 +20,32 @@ def draw_name(p, x, y, name, affil, dinner=0, workshop=0, congress_color="green"
     SIMEI         = CONSTANT_STRINGS[6]
     # 大会名
     draw_string(p, x + 1*mm, y - 10*mm, CONGRESS, font_name=font_name, font_size=14, 
-                color="white", shape="rect", bg_color=congress_color, width=89*mm)
+                color="white", shape="rect", bg_color=congress_color, width=91*mm)
     # 会場・日時
     draw_string(p, x + 65*mm, y -10*mm, PLACE    , font_name=font_name, font_size=7, color="white")
     draw_string(p, x + 65*mm, y - 6*mm, CONG_DATE, font_name=font_name, font_size=7, color="white")
     # 所属・氏名欄
-    draw_string(p, x + 10*mm, y - 15*mm, SHOZOKU, font_name=font_name, font_size=6)
-    draw_string(p, x + 10*mm, y - 25*mm, SIMEI  , font_name=font_name, font_size=6)
-    p.line(x + 10*mm, y - 20*mm, x + 80*mm, y - 20*mm)
-    p.line(x + 10*mm, y - 30*mm, x + 80*mm, y - 30*mm)
+    draw_string(p, x + 2*mm, y - 15*mm, SHOZOKU, font_name=font_name, font_size=6)
+    draw_string(p, x + 2*mm, y - 30*mm, SIMEI  , font_name=font_name, font_size=6)
+    p.line(x + 2*mm, y - 25*mm, x + 80*mm, y - 25*mm)
+    p.line(x + 2*mm, y - 40*mm, x + 80*mm, y - 40*mm)
     # 所属：長い文字列はフォントサイズを小さくする
     if (affil is not None) and (affil != ""):
-        font_size = min((180 / len(affil)), 12)
-        draw_string(p, x + 15*mm, y - 19*mm, affil, font_name=font_name, font_size=font_size)
+        font_size = min((210 / len(affil)), 20)
+        draw_string(p, x + 2*mm, y - 24*mm, affil, font_name=font_name, font_size=font_size)
     # 氏名
-    draw_string(p, x + 15*mm, y - 29*mm, name, font_name=font_name, font_size=18)
+    draw_string(p, x + 2*mm, y - 39*mm, name, font_name=font_name, font_size=24)
     # 懇親会：参加マーク
     if dinner > 0:
-        draw_string(p, x + 75*mm, y - 25*mm, str="懇", font_name=font_name, font_size=9, 
+        draw_string(p, x + 5*mm, y - 47*mm, str="懇", font_name=font_name, font_size=12, 
                     color="white", shape="circle", bg_color="red")
     # 研修会：参加マーク
     if workshop > 0 :
-        draw_string(p, x + 80*mm, y - 25*mm, str="研", font_name=font_name, font_size=9, 
+        draw_string(p, x + 12*mm, y - 47*mm, str="研", font_name=font_name, font_size=12, 
                     color="white", shape="circle", bg_color="blue")
     # 主催
-    draw_string(p, x + 55*mm, y - 45*mm, COMMITTEE    , font_name=font_name, font_size=6)
-    draw_string(p, x + 55*mm, y - 48*mm, COMMITTEE_SUB, font_name=font_name, font_size=6)
+    draw_string(p, x + 45*mm, y - 45*mm, COMMITTEE    , font_name=font_name, font_size=6)
+    draw_string(p, x + 45*mm, y - 48*mm, COMMITTEE_SUB, font_name=font_name, font_size=6)
 
 
 ### 名札の左上の各位置

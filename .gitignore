@@ -10,3 +10,5 @@ __pycache__/
 *.png
 !stamp.png
 *.pdf
+file.bz2
+shape.dat.txt

@@ -99,3 +99,31 @@ overlay_pdf.py
 overlay_pdf.py
 
 発表番号あるいはページ番号を原稿のPDFファイルに重ね合わせることができます．
+
+
+
+## Google Formの生成
+
+create_form.gs：form_questions.csv のデータをもとに Google フォームを生成するスクリプト
+
+- 準備
+  - form_questions.csv を Google Drive（マイドライブ直下）にアップロード
+  - CSV の ## 部分を実際の値に置き換えてから保存
+  - この GAS スクリプトで createVSJFormFromCSV() を実行
+  - セキュリティの警告の画面がでたら，承認する
+
+- CSV仕様
+   - form_questions.csv: 1行1エントリ
+     - section_id   : config 行ではキー名，page_break では分岐先 ID
+     - type         : config | text | paragraph | radio | checkbox | page_break
+     - title        : config 行では設定値，それ以外は質問タイトル
+     - required     : TRUE | FALSE
+     - help_text    : 説明文（改行は \n と記述）
+     - choices      : 選択肢をパイプ (|) 区切りで記述
+     - other_option : TRUE で「その他（自由記述）」を追加
+     - validation   : max_length:N  または  pattern:正規表現
+     - branching    : 選択肢->移動先 をパイプ区切り．移動先: section_id | SUBMIT | NEXT
+
+- 注意
+ - ファイルの提出は GAS で作成不可
+ - Google Forms 編集画面から手動でファイルアップロード質問を追加する

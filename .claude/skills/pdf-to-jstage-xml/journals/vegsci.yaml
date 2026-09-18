@@ -1,0 +1,55 @@
+# 植生学会誌 (Vegetation Science) の設定
+# 雑誌ごとに違うものだけをここに置く．スクリプトの中に雑誌固有の値を書かない．
+
+journal_id: vegsci          # J-STAGE の資料コード
+issn:
+  ppub: 1342-2448
+  epub: 2189-4809
+title:
+  ja: 植生学会誌
+  en: Vegetation Science
+publisher:
+  ja: 植生学会
+  en: The Society of Vegetation Science
+copyright_holder:
+  ja: 植生学会
+  en: The Society of Vegetation Science
+
+# 原稿種別 (1ページ目の左上の帯) → J-STAGE の article-type と英語の種別名
+article_types:
+  総説:     {type: review-article,       en: Review}
+  原著論文: {type: research-article,     en: Original Article}
+  原著:     {type: research-article,     en: Original Article}
+  短報:     {type: brief-report,         en: Short Communication}
+  資料:     {type: other,                en: Data}
+  特集:     {type: other,                en: Special Feature}
+  寄稿:     {type: other,                en: Contribution}
+
+# 組版の判定に使う値 (単位は pt．InDesign で組まれた 2014 年頃の号で確かめた)
+layout:
+  header_y_max: 62          # これより上は柱とノンブル
+  footer_y_min: 745         # これより下は脚注 (1ページ目の連絡先・受付日)
+  body_size: 9.9            # 本文の字の大きさ
+  ref_size: 8.5             # 引用文献の字の大きさ
+  size_tol: 0.35
+  indent_min: 5             # 行頭がこれ以上右にずれていたら段落の始まり (字下げ)
+  ref_indent_max: 3         # 引用文献: 行頭のずれがこれ未満なら新しい文献 (ぶら下げ字下げ)
+  heading_font: Gothic      # 見出しとキャプションの書体名に含まれる文字列
+  heading1_size: 11.3       # 「■ はじめに」
+  heading1_prefix: "■"
+  heading2_size: 9.9        # 「水田面積の変遷と歴史性」(ゴシック体・本文と同じ大きさ)
+  italic_font: Italic       # この文字列を含む書体は *斜体* にする
+  caption_pattern: '^(図|表|Fig\.|Table)\s*(\d+)'
+
+# 特別な扱いをする見出し
+sections:
+  abstract: 摘要            # → <abstract xml:lang="ja"> (本文からは外す)
+  ack: 謝辞                 # → <back><ack>
+  refs: 引用文献            # → <back><ref-list>
+  appendix: 付録            # → <back><app-group>
+
+# 引用文献の書式 (scripts/refs.py の規則を選ぶ)
+reference_style: author-year
+
+# DOI の形 (PDF に DOI が印刷されていない号で，下書きに入れる候補．必ず確かめる)
+doi_template: "10.15031/vegsci.{volume}.{fpage}"

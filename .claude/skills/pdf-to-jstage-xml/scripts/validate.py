@@ -1,0 +1,176 @@
+"""J-STAGE 用の全文 XML を検証する (手順 4: 検証)．
+
+使い方:
+    python validate.py <記事識別子.xml>
+
+1. DTD (J-STAGE の JATS 1.1) で妥当性を見る．
+   DTD 一式は初回だけ https://www.jstage.jst.go.jp/dtds/1.1/ から取り，スキルの dtd/ に置く
+   (git では追跡しない．取り直すときは dtd/ を消す)．
+2. J-STAGE の独自規則 (「XML データフォーマットガイドライン (JATS1.1 版)」第 2.4 版と
+   「メタデータ項目一覧」) のうち，DTD では分からないものを見る．
+
+どちらも通っても，最後は全文 XML 作成ツールの「XML 検証」と「プレビュー」で確かめる．
+"""
+import posixpath
+import re
+import sys
+import urllib.request
+from pathlib import Path
+
+from lxml import etree
+
+SKILL_DIR = Path(__file__).resolve().parent.parent
+DTD_DIR = SKILL_DIR / "dtd"
+DTD_BASE = "https://www.jstage.jst.go.jp/dtds/1.1/"
+DTD_MAIN = "JATS-journalpublishing1.dtd"
+NS = {"xlink": "http://www.w3.org/1999/xlink"}
+
+
+def ensure_dtd():
+    if (DTD_DIR / DTD_MAIN).exists():
+        return
+    print("DTD を J-STAGE から取得する (初回だけ)")
+    pat = re.compile(r'(?:SYSTEM|PUBLIC\s+"[^"]*")\s*"([^"]+\.(?:ent|dtd|mod))"', re.S)
+    todo, seen = [DTD_MAIN], set()
+    while todo:
+        f = todo.pop()
+        if f in seen:
+            continue
+        seen.add(f)
+        path = DTD_DIR / f
+        if not path.exists():
+            try:
+                data = urllib.request.urlopen(DTD_BASE + f, timeout=60).read()
+            except Exception:
+                continue  # 条件付きで参照されるだけのもの (404) は無視してよい
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        d = posixpath.dirname(f)
+        for m in pat.findall(path.read_text(encoding="utf-8", errors="replace")):
+            if not m.startswith("http"):
+                todo.append(posixpath.normpath(posixpath.join(d, m)))
+    print(f"  {len(seen)} ファイル")
+
+
+def text_len(el):
+    return len("".join(el.itertext())) if el is not None else 0
+
+
+def check_rules(doc, xml_path):
+    """DTD で分からない J-STAGE の規則．(重大度, 内容) の列を返す．"""
+    errs = []
+    r = doc.getroot()
+    def need(xpath, msg):
+        if not r.xpath(xpath, namespaces=NS):
+            errs.append(("エラー", msg))
+    need('front/journal-meta/journal-id[@journal-id-type="j-stage"]', "journal-id (j-stage) が無い")
+    need("front/journal-meta/issn", "issn が無い")
+    need("front/article-meta/title-group/article-title", "記事の表題が無い")
+    need("front/article-meta/volume", "巻が無い")
+    need("front/article-meta/issue", "号が無い")
+    need("front/article-meta/pub-date/year", "発行年が無い")
+    if not r.xpath("front/article-meta/fpage|front/article-meta/article-id[@pub-id-type='manuscript']"):
+        errs.append(("エラー", "開始ページも論文番号も無い"))
+    if r.get("article-type") is None or "要確認" in (r.get("article-type") or ""):
+        errs.append(("エラー", "article-type が決まっていない"))
+
+    # 文字数の上限 (メタデータ項目一覧)
+    limits = [("front/article-meta/title-group/article-title", 2000, "記事表題"),
+              ("front/article-meta/abstract", 4000, "抄録"),
+              ("front/article-meta/trans-abstract", 4000, "抄録 (多言語)"),
+              ("back/ack", 4000, "謝辞")]
+    for xp, n, name in limits:
+        for el in r.xpath(xp):
+            if text_len(el) > n:
+                errs.append(("エラー", f"{name}が {text_len(el)} 字 (上限 {n})"))
+    for el in r.xpath("//kwd"):
+        if text_len(el) > 1000:
+            errs.append(("エラー", f"キーワードが長すぎる: {text_len(el)} 字"))
+    for el in r.xpath("back/ref-list/ref/mixed-citation"):
+        if text_len(el) > 4000:
+            errs.append(("エラー", f"引用文献が 4000 字を超える: {el.getparent().get('id')}"))
+    for el in r.xpath("//surname"):
+        if re.search(r"[0-9]", el.text or ""):
+            errs.append(("エラー", f"姓に半角数字: {el.text}"))
+
+    # 著作権は日英両方か，どちらも無いか
+    for tag in ("copyright-statement", "copyright-holder"):
+        langs = {e.get("{http://www.w3.org/XML/1998/namespace}lang") for e in r.xpath(f"//permissions/{tag}")}
+        if langs and langs != {"ja", "en"}:
+            errs.append(("エラー", f"{tag} は日英両方が要る (いま {sorted(l for l in langs if l)})"))
+
+    # ID の参照
+    ids = {e.get("id") for e in r.xpath("//*[@id]")}
+    for x in r.xpath("//xref"):
+        for rid in (x.get("rid") or "").split():
+            if rid not in ids:
+                errs.append(("エラー", f"xref の参照先が無い: {rid}"))
+    # 画像
+    gdir = xml_path.parent / "Graphics"
+    for g in r.xpath("//graphic|//inline-graphic", namespaces=NS):
+        href = g.get("{http://www.w3.org/1999/xlink}href")
+        stem = xml_path.stem
+        if href and href.startswith(stem + "."):
+            errs.append(("エラー", f"本文の画像名は「記事識別子.」で始められない: {href}"))
+        # 編集登載編 別紙2: 画像・メディアファイルは「{記事識別子}_{連番}.{拡張子}」(連番は0埋めを勧める)
+        if href and not href.startswith("abst-") and g.getparent().tag != "supplementary-material" \
+                and not re.fullmatch(re.escape(stem) + r"_\d+\.(jpe?g|gif|png|mp4)", href, re.I):
+            errs.append(("エラー", f"画像名が「{stem}_連番.拡張子」の形でない (別紙2): {href}"))
+        if g.getparent().tag != "supplementary-material" and href and not (gdir / href).exists():
+            errs.append(("エラー", f"Graphics に画像が無い: {href}"))
+        if href and not re.search(r"\.(jpe?g|gif|png)$", href, re.I):
+            errs.append(("エラー", f"画像の拡張子は jpg・gif・png だけ: {href}"))
+    # 使われていない文献・図表
+    cited = {rid for x in r.xpath("//xref") for rid in (x.get("rid") or "").split()}
+    for ref in r.xpath("back/ref-list/ref"):
+        if ref.get("id") not in cited:
+            errs.append(("注意", f"本文から参照されていない文献: {ref.get('id')} "
+                         + "".join(ref.itertext())[:50].strip()))
+    for f in r.xpath("//fig|//table-wrap"):
+        if f.get("id") not in cited:
+            errs.append(("注意", f"本文から参照されていない図表: {f.get('id')}"))
+    # ファイル名
+    if xml_path.parent.name != xml_path.stem:
+        errs.append(("エラー", f"フォルダ名と XML のファイル名 (記事識別子) が違う: {xml_path.parent.name} / {xml_path.stem}"))
+    if not (xml_path.parent / f"{xml_path.stem}.pdf").exists():
+        errs.append(("注意", "全文 PDF (記事識別子.pdf) が同じフォルダに無い"))
+    return errs
+
+
+def main():
+    if len(sys.argv) < 2:
+        sys.exit(__doc__)
+    xml_path = Path(sys.argv[1])
+    ensure_dtd()
+    dtd = etree.DTD(str(DTD_DIR / DTD_MAIN))
+    parser = etree.XMLParser(load_dtd=False, no_network=True, resolve_entities=False)
+    try:
+        doc = etree.parse(str(xml_path), parser)
+    except etree.XMLSyntaxError as e:
+        sys.exit(f"XML として読めない: {e}")
+    ok = dtd.validate(doc)
+    n_err = 0
+    if ok:
+        print("DTD: 妥当")
+    else:
+        errs = list(dtd.error_log.filter_from_errors())
+        print(f"DTD: {len(errs)} 件のエラー")
+        for e in errs[:50]:
+            print(f"  {e.line}: {e.message}")
+        n_err += len(errs)
+    rules = check_rules(doc, xml_path)
+    e_rules = [m for s, m in rules if s == "エラー"]
+    w_rules = [m for s, m in rules if s == "注意"]
+    print(f"J-STAGE の規則: エラー {len(e_rules)} 件，注意 {len(w_rules)} 件")
+    for m in e_rules:
+        print(f"  エラー: {m}")
+    for m in w_rules[:40]:
+        print(f"  注意: {m}")
+    if len(w_rules) > 40:
+        print(f"  (注意はあと {len(w_rules) - 40} 件)")
+    n_err += len(e_rules)
+    sys.exit(1 if n_err else 0)
+
+
+if __name__ == "__main__":
+    main()

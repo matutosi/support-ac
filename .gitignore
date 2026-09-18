@@ -12,3 +12,7 @@ __pycache__/
 *.pdf
 file.bz2
 shape.dat.txt
+# pdf-to-jstage-xml: 作業ディレクトリと，初回に J-STAGE から取る DTD 一式
+jstage/work/
+.claude/skills/pdf-to-jstage-xml/dtd/
+**/__pycache__/

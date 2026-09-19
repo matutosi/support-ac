@@ -19,13 +19,14 @@ argument-hint: "<論文.pdf または記事の URL> [--review none|opus|fable]"
   「資料コード/巻/号/記事識別子/」の入れ子は zip の中の名前にだけ付け，PDF と図表の画像は元のファイルから
   直接 zip へ入れる (`scripts/manifest.py`)．できあがる形:
   ```
-  jstage/work/37_37/
-    37_37.pdf               論文の PDF (入力．全文 PDF としてそのまま zip に入る)
+  jstage/work/31_193/        (巻 31・開始ページ 193 の論文の例)
+    31_193.pdf              論文の PDF (入力．全文 PDF としてそのまま zip に入る)
     body.md・meta.yaml ほか  下書き (手順 1〜2)
     pages/・figs/・tables/   ページ画像・図表の画像 (手順 1)
-    out/37_37.xml           全文 XML (手順 3)
+    out/31_193.xml          全文 XML (手順 3)
     out/manifest.json       zip に入れるものの対応表 (手順 3)
-    37_37.zip               登載用の一式 (手順 3．中は vegsci/37/1/37_37/ に XML・PDF・Graphics/)
+    31_193.zip              登載用の一式 (手順 3．中は vegsci/31/2/31_193/ に XML・PDF・Graphics/)
+                            (vegsci=資料コード，31=巻，2=号，31_193=記事識別子)
   ```
 
 ## 実行時のオプション
@@ -38,7 +39,7 @@ argument-hint: "<論文.pdf または記事の URL> [--review none|opus|fable]"
 | `--review opus` | 「opus で検証」「XML の作成と同じモデルで」 | 検証役を `model: opus` で起動する |
 | `--review fable` | 「fable で検証」 | 検証役を `model: fable` で起動する |
 
-- 例: `/pdf-to-jstage-xml jstage/work/37_37/37_37.pdf --review fable`
+- 例: `/pdf-to-jstage-xml jstage/work/31_193/31_193.pdf --review fable`
 - **指定が無いときは，手順 0 に入る前に AskUserQuestion で1回だけ聞く**．選択肢は上の3つで，
   手順 5 の表の利点・欠点を添える．「(推奨)」を付けるのは **XML を作ったのと別のモデル**
   (ユーザー設定「書き手と評価者でモデルを変える」)．**`none` には推奨を付けない**．

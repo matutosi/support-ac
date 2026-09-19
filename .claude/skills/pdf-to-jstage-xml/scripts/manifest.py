@@ -9,9 +9,9 @@ J-STAGE が求める「資料コード/巻/号/記事識別子/」の入れ子�
     <作業ディレクトリ>/figs/・tables/          ... 図表の画像 (元のファイル．zip の中で改名する)
 
 manifest.json の中身:
-    {"journal": "vegsci", "volume": "37", "issue": "1", "article": "37_37",
-     "pdf": "37_37.pdf",                                  (作業ディレクトリからの相対パス．無ければ null)
-     "graphics": [["37_37_01.png", "figs/fig1.png"], ...]}  (zip の中の名前と元のファイル)
+    {"journal": "vegsci", "volume": "31", "issue": "2", "article": "31_193",
+     "pdf": "31_193.pdf",                                    (作業ディレクトリからの相対パス．無ければ null)
+     "graphics": [["31_193_01.png", "figs/fig1.png"], ...]}  (zip の中の名前と元のファイル)
 """
 import json
 import zipfile

@@ -11,7 +11,7 @@ argument-hint: "<論文.pdf または記事の URL> [--review none|opus|fable]"
 
 ## 前提
 
-- Python 3 と `pip install pymupdf lxml pyyaml`
+- Python 3.11 以上と `pip install pymupdf lxml pyyaml` (スクリプトは 3.11 で構文を確かめてある)
 - 対象の雑誌の設定 `journals/<資料コード>.yaml` があること (いまは `vegsci.yaml` だけ)
 - 作業ディレクトリは `support-ac/jstage/work/<巻>_<開始ページ>/` にする (git では追跡しない)．
   **論文の PDF はその中に `<巻>_<開始ページ>.pdf` として置く** (外に置かない．`build.py` が既定でここを見る)．

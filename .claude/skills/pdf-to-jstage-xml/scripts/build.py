@@ -658,8 +658,9 @@ def build_body(blocks, refs, floats, work, names):
             out.append(f"<p>{para_xml(b[1], refs, floats, 'body')}</p>")
         elif b[0] == "list":
             typ = "order" if re.match(r"\d", b[1][0]) else "bullet"
+            marker = re.compile(r"^(- |\d+[.)] )")  # 箇条書きの行頭の印 (f 文字列の中では書けない)
             items = "".join(
-                f"<list-item><p>{para_xml(re.sub(r'^(- |\d+[.)] )', '', it), refs, floats, 'list')}</p></list-item>"
+                f"<list-item><p>{para_xml(marker.sub('', it), refs, floats, 'list')}</p></list-item>"
                 for it in b[1])
             out.append(f'<list list-type="{typ}">{items}</list>')
         elif b[0] in ("fig", "table"):

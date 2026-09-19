@@ -1,3 +1,4 @@
+from pathlib import Path
 import streamlit as st
 from reportlab.lib.pagesizes import A4, A3, A5
 from reportlab.lib.units import mm
@@ -9,6 +10,7 @@ from overlay_pdf import overlay_pdf
 from empty_page import create_empty_page
 from combine_pdf import combine_pdfs
 from convert_pdf_to_png import convert_pdf_to_png, add_border
+from paths import output_path
 
 def home():
     st.sidebar.success("Select")
@@ -54,32 +56,32 @@ def create():
 
     # create PDF, convert to PNG, and display
     if create_obj == "ページ番号": # page numbers
-        path_page_numbers = "page_numbers.pdf"
+        path_page_numbers = output_path("page_numbers.pdf")
         create_page_numbers(path_page_numbers, pagesize=pagesize, start=start, end=end, x=x, y=y, font_size=font_size, bleed=bleed)
         path_page_numbers_png = convert_pdf_to_png(path_page_numbers)
         add_border(path_page_numbers_png)
-        st.download_button('PDFのダウンロード', open(path_page_numbers, 'br'), path_page_numbers)
+        st.download_button('PDFのダウンロード', open(path_page_numbers, 'br'), Path(path_page_numbers).name)
         st.image(path_page_numbers_png)
     if create_obj == "発表番号":
-        path_session_numbers = "session_numbers.pdf"
+        path_session_numbers = output_path("session_numbers.pdf")
         create_session_numbers(path_session_numbers, pagesize=pagesize, start=start, end=end, pre=session, post="", x=x, y=y, font_size=font_size, bleed=bleed)
         path_session_numbers_png = convert_pdf_to_png(path_session_numbers)
         add_border(path_session_numbers_png)
-        st.download_button('PDFのダウンロード', open(path_session_numbers, 'br'), path_session_numbers)
+        st.download_button('PDFのダウンロード', open(path_session_numbers, 'br'), Path(path_session_numbers).name)
         st.image(path_session_numbers_png)
     if create_obj == "区切り":
-        path_division = "division.pdf"
+        path_division = output_path("division.pdf")
         create_division(path_division, pagesize=pagesize, str=division, x=x, y=y, height=height, font_size=font_size, bleed=bleed)
         path_division_png = convert_pdf_to_png(path_division)
         add_border(path_division_png)
-        st.download_button('PDFのダウンロード', open(path_division, 'br'), path_division)
+        st.download_button('PDFのダウンロード', open(path_division, 'br'), Path(path_division).name)
         st.image(path_division_png)
     if create_obj == "空白ページ":
-        path_empty_page = "empty_page.pdf"
+        path_empty_page = output_path("empty_page.pdf")
         create_empty_page(path_empty_page, pagesize=pagesize, bleed=bleed)
         path_empty_page_png = convert_pdf_to_png(path_empty_page)
         add_border(path_empty_page_png)
-        st.download_button('PDFのダウンロード', open(path_empty_page, 'br'), path_empty_page)
+        st.download_button('PDFのダウンロード', open(path_empty_page, 'br'), Path(path_empty_page).name)
         st.image(path_empty_page_png)
 
 def overlay():
@@ -88,11 +90,11 @@ def overlay():
         pdf_overlay = st.file_uploader("重合わせPDF(上側)", type=["pdf"])
 
     if pdf_base is not None and pdf_overlay is not None:
-        path_overlaid = "overalaid.pdf"
+        path_overlaid = output_path("overalaid.pdf")
         overlay_pdf(pdf_base, pdf_overlay, path_overlaid)
         path_overalaid_png = convert_pdf_to_png(path_overlaid)
         add_border(path_overalaid_png)
-        st.download_button('PDFのダウンロード', open(path_overlaid, 'br'), path_overlaid)
+        st.download_button('PDFのダウンロード', open(path_overlaid, 'br'), Path(path_overlaid).name)
         st.image(path_overalaid_png)
 
 def combine():
@@ -101,10 +103,10 @@ def combine():
         st.write("ファイル名の順序で並べ替えて結合")
 
     if pdf_files != []:
-        path_combined = "combined.pdf"
+        path_combined = output_path("combined.pdf")
         pdf_files_sorted = sorted(pdf_files, key=lambda x: x.name)
         combine_pdfs(pdf_files_sorted, output=path_combined)
-        st.download_button('PDFのダウンロード', open(path_combined, 'br'), path_combined)
+        st.download_button('PDFのダウンロード', open(path_combined, 'br'), Path(path_combined).name)
 
 page_names_to_funcs = {
     "home": home,

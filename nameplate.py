@@ -8,6 +8,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 import pandas as pd
 
 from draw_string import draw_string
+from paths import FONT_GENSHIN, ROSTER_XLSX, output_path
 
 def draw_name(p, x, y, name, affil, dinner=0, workshop=0, congress_color="green", CONSTANT_STRINGS=None, font_name="GenShinGothic"):
     # 定数
@@ -115,7 +116,7 @@ if __name__ == "__main__":
     ### 源真ゴシック（ http://jikasei.me/font/genshin/）
     ### フォント登録
     font_name = "GenShinGothic"
-    GEN_SHIN_GOTHIC_MEDIUM_TTF = "./GenShinGothic-Monospace-Medium.ttf"
+    GEN_SHIN_GOTHIC_MEDIUM_TTF = FONT_GENSHIN
     pdfmetrics.registerFont(TTFont(font_name, GEN_SHIN_GOTHIC_MEDIUM_TTF))
 
     ### 大会情報
@@ -129,11 +130,11 @@ if __name__ == "__main__":
     CONSTANT_STRINGS = (CONGRESS, CONG_DATE, COMMITTEE, COMMITTEE_SUB, PLACE, SHOZOKU, SIMEI)
 
     ### 入力データ
-    path_input = "名簿・領収書.xlsx"
+    path_input = ROSTER_XLSX
 
     ### 出力ファイル名
-    path_named_plate = "nameplate.pdf"
-    path_empty_plate = "nameplate_empty.pdf"
+    path_named_plate = output_path("nameplate.pdf")
+    path_empty_plate = output_path("nameplate_empty.pdf")
     ############ 設定箇所おわり ############
 
     create_named_nameplate(path_input, path_named_plate, font_name=font_name, CONSTANT_STRINGS=CONSTANT_STRINGS)

@@ -3,6 +3,8 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
 # import custom modules
+from pathlib import Path
+from paths import FONT_GENSHIN, ROSTER_XLSX, output_path
 from nameplate import create_named_nameplate, create_empty_nameplate
 from convert_pdf_to_png import convert_pdf_to_png
 
@@ -10,7 +12,7 @@ from convert_pdf_to_png import convert_pdf_to_png
 ### 源真ゴシック（ http://jikasei.me/font/genshin/）
 ### フォント登録
 font_name = "GenShinGothic"
-GEN_SHIN_GOTHIC_MEDIUM_TTF = "./GenShinGothic-Monospace-Medium.ttf"
+GEN_SHIN_GOTHIC_MEDIUM_TTF = FONT_GENSHIN
 pdfmetrics.registerFont(TTFont(font_name, GEN_SHIN_GOTHIC_MEDIUM_TTF))
 
 st.set_page_config(
@@ -19,8 +21,8 @@ st.set_page_config(
 )
 
 ### 出力ファイル名
-path_named_plate = "nameplate.pdf"
-path_empty_plate = "nameplate_empty.pdf"
+path_named_plate = output_path("nameplate.pdf")
+path_empty_plate = output_path("nameplate_empty.pdf")
 
 settings = st.sidebar
 
@@ -28,8 +30,8 @@ with settings:
     ### 入力ファイル
     use_example = st.checkbox("use example", value=True)
     if use_example:
-        path_input = "名簿・領収書.xlsx"
-        st.download_button('Excelファイルのダウンロード', open(path_input, 'br'), path_input)
+        path_input = ROSTER_XLSX
+        st.download_button('Excelファイルのダウンロード', open(path_input, 'br'), Path(path_input).name)
     else:
         path_input = st.file_uploader("名簿ファイル", type=["xlsx"])
 
@@ -57,8 +59,8 @@ if path_input:
 
     with col1:
         st.image(path_named_png, "事前申込(p1)")
-        st.download_button('PDFのダウンロード', open(path_named_plate, 'br'), path_named_plate)
+        st.download_button('PDFのダウンロード', open(path_named_plate, 'br'), Path(path_named_plate).name)
 
     with col2:
         st.image(path_empty_png, "当日用")
-        st.download_button('PDFのダウンロード', open(path_empty_plate, 'br'), path_empty_plate)
+        st.download_button('PDFのダウンロード', open(path_empty_plate, 'br'), Path(path_empty_plate).name)

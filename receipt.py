@@ -11,6 +11,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 from image import read_bz2
 
 from draw_string import draw_string
+from paths import FONT_GENSHIN, ROSTER_XLSX, STAMP_PNG, STAMP_BZ2, STAMP_BZ2_TXT, output_path
 
 def draw_footer(p, locations, footers, font_name="GenShinGothic"):
     for loc, footer in zip(locations, footers):
@@ -147,11 +148,11 @@ if __name__ == "__main__":
     # フォント登録
     # 源真ゴシック（ http://jikasei.me/font/genshin/）
     font_name = "GenShinGothic"
-    GEN_SHIN_GOTHIC_MEDIUM_TTF = "./GenShinGothic-Monospace-Medium.ttf"
+    GEN_SHIN_GOTHIC_MEDIUM_TTF = FONT_GENSHIN
     pdfmetrics.registerFont(TTFont(font_name, GEN_SHIN_GOTHIC_MEDIUM_TTF))
 
-    # img = read_bz2("stamp.bz2", "stamp.bz2.txt")
-    img = "stamp.png"
+    # img = read_bz2(STAMP_BZ2, STAMP_BZ2_TXT)
+    img = STAMP_PNG
 
     ### 大会情報
     TITLE         = "領収書"
@@ -182,11 +183,11 @@ if __name__ == "__main__":
 
 
     ### 入力データ
-    path_input = "名簿・領収書.xlsx"
+    path_input = ROSTER_XLSX
 
     ### 出力ファイル名
-    path_named_receipt = "receipt.pdf"
-    path_empty_receipt = "receipt_empty.pdf"
+    path_named_receipt = output_path("receipt.pdf")
+    path_empty_receipt = output_path("receipt_empty.pdf")
 
 
     ############ 設定箇所おわり ############

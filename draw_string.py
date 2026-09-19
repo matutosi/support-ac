@@ -5,6 +5,8 @@ from reportlab.lib.pagesizes import A4, portrait
 from reportlab.pdfbase.ttfonts import TTFont
 import os
 
+from paths import FONT_GENSHIN, output_path
+
 def draw_string(p, x, y, 
                 str, font_name=None, font_size=30, color="black",
                 shape="rect",
@@ -41,10 +43,10 @@ if __name__ == '__main__':
     # フォント登録
     # 源真ゴシック（ http://jikasei.me/font/genshin/）
     font_name = 'GenShinGothic'
-    GEN_SHIN_GOTHIC_MEDIUM_TTF = "./GenShinGothic-Monospace-Medium.ttf"
+    GEN_SHIN_GOTHIC_MEDIUM_TTF = FONT_GENSHIN
     pdfmetrics.registerFont(TTFont(font_name, GEN_SHIN_GOTHIC_MEDIUM_TTF))
 
-    path_file = "output.pdf"
+    path_file = output_path("output.pdf")
 
     p = canvas.Canvas(path_file, pagesize=A4)
 

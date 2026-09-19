@@ -9,12 +9,13 @@ from reportlab.pdfbase.ttfonts import TTFont
 from receipt import create_named_receipt, create_empty_receipt
 from convert_pdf_to_png import convert_pdf_to_png
 from image import read_bz2
+from paths import FONT_GENSHIN, ROSTER_XLSX, STAMP_PNG, output_path
 
 ############ 設定箇所はじめ ############
 ### 源真ゴシック（ http://jikasei.me/font/genshin/）
 ### フォント登録
 font_name = "GenShinGothic"
-GEN_SHIN_GOTHIC_MEDIUM_TTF = "./GenShinGothic-Monospace-Medium.ttf"
+GEN_SHIN_GOTHIC_MEDIUM_TTF = FONT_GENSHIN
 pdfmetrics.registerFont(TTFont(font_name, GEN_SHIN_GOTHIC_MEDIUM_TTF))
 
 st.set_page_config(
@@ -23,8 +24,8 @@ st.set_page_config(
 )
 
 ### 出力ファイル名
-path_named_receipt = "receipt.pdf"
-path_empty_receipt = "receipt_empty.pdf"
+path_named_receipt = output_path("receipt.pdf")
+path_empty_receipt = output_path("receipt_empty.pdf")
 
 settings = st.sidebar
 
@@ -32,8 +33,8 @@ with settings:
     ### 入力ファイル
     use_example = st.checkbox("use example", value=True)
     if use_example:
-        path_input = "名簿・領収書.xlsx"
-        st.download_button('Excelファイルのダウンロード', open(path_input, 'br'), path_input)
+        path_input = ROSTER_XLSX
+        st.download_button('Excelファイルのダウンロード', open(path_input, 'br'), Path(path_input).name)
     else:
         path_input = st.file_uploader("名簿ファイル", type=["xlsx"])
 
@@ -74,21 +75,24 @@ with settings:
     img = None
     use_stamp_example = st.checkbox("use stamp example", value=True)
     if use_stamp_example:
-        img = "stamp.png"
+        img = STAMP_PNG
     else:
         use_png = st.checkbox("use PNG", value=True)
         if use_png:
             img = st.file_uploader("押印用画像", type=["png"])
             if img:
-                Image.open(img).save(img.name, "png")
-                img = img.name
+                img_path = output_path(img.name)
+                Image.open(img).save(img_path, "png")
+                img = img_path
         else:
             bz2 = st.file_uploader("bz2", type=["bz2"])
             bz2_shape = st.file_uploader("shape", type=["txt"])
             if bz2 and bz2_shape:
-                Path(bz2.name).write_bytes(bz2.getvalue())
-                Path(bz2_shape.name).write_text(bz2_shape.getvalue().decode("utf-8"))
-                img = read_bz2(bz2.name, bz2_shape.name)
+                path_bz2 = output_path(bz2.name)
+                path_bz2_shape = output_path(bz2_shape.name)
+                Path(path_bz2).write_bytes(bz2.getvalue())
+                Path(path_bz2_shape).write_text(bz2_shape.getvalue().decode("utf-8"))
+                img = read_bz2(path_bz2, path_bz2_shape)
 
 ############ 設定箇所おわり ############
 
@@ -103,9 +107,9 @@ if path_input:
 
     with col1:
         st.image(path_named_png, "事前申込(p1)")
-        st.download_button('PDFのダウンロード', open(path_named_receipt, 'br'), path_named_receipt)
+        st.download_button('PDFのダウンロード', open(path_named_receipt, 'br'), Path(path_named_receipt).name)
 
     with col2:
         st.image(path_empty_png, "当日用")
-        st.download_button('PDFのダウンロード', open(path_empty_receipt, 'br'), path_empty_receipt)
+        st.download_button('PDFのダウンロード', open(path_empty_receipt, 'br'), Path(path_empty_receipt).name)
 

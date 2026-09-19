@@ -6,8 +6,10 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.lib.colors import white
 
+from paths import FONT_GENSHIN, output_path
+
 font_gen_shin = "GenShinGothic"
-GEN_SHIN_GOTHIC_MEDIUM_TTF = "./GenShinGothic-Monospace-Medium.ttf"
+GEN_SHIN_GOTHIC_MEDIUM_TTF = FONT_GENSHIN
 pdfmetrics.registerFont(TTFont(font_gen_shin, GEN_SHIN_GOTHIC_MEDIUM_TTF))
 
 def create_session_number(c, x, y, str, font_name=None, font_size=None):
@@ -98,11 +100,11 @@ if __name__ == "__main__":
     ### 源真ゴシック（ http://jikasei.me/font/genshin/）
     ### フォント登録
     font_name = "GenShinGothic"
-    GEN_SHIN_GOTHIC_MEDIUM_TTF = "./GenShinGothic-Monospace-Medium.ttf"
+    GEN_SHIN_GOTHIC_MEDIUM_TTF = FONT_GENSHIN
     pdfmetrics.registerFont(TTFont(font_name, GEN_SHIN_GOTHIC_MEDIUM_TTF))
 
     # create page_numbers
-    path_pagenumbers = "page_numbers.pdf"
+    path_pagenumbers = output_path("page_numbers.pdf")
     pagesize = A4
     y = 10  # Y coordinate in mm
     font_size = 12  # Font size
@@ -110,13 +112,13 @@ if __name__ == "__main__":
     create_page_numbers(path_pagenumbers, pagesize, start=1, end=100, y=y, font_size=font_size)
 
     # session numbers
-    path_session_a = "session_a.pdf"
+    path_session_a = output_path("session_a.pdf")
     create_session_numbers(path_session_a, pagesize, start=1, end=30, pre="A")
-    path_session_a = "session_b.pdf"
+    path_session_a = output_path("session_b.pdf")
     create_session_numbers(path_session_a, pagesize, start=1, end=30, pre="B")
-    path_session_a = "session_p.pdf"
+    path_session_a = output_path("session_p.pdf")
     create_session_numbers(path_session_a, pagesize, start=1, end=30, pre="P")
 
     # overlay session numbers on page numbers
-    path_overlaid = "overlaid.pdf"
+    path_overlaid = output_path("overlaid.pdf")
     overlay_pdf(path_session_a, path_pagenumbers, path_overlaid)

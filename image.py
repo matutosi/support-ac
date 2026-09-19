@@ -4,6 +4,8 @@ import numpy as np
 from PIL import Image # pillow
 from reportlab.lib.utils import ImageReader
 
+from paths import STAMP_PNG, STAMP_BZ2
+
 def read_bz2(bz2_file, shape_file):
     """
     bz2とshapeを読み込み・解凍して，PILのImageReaderオブジェクトを返す
@@ -48,8 +50,8 @@ def compress_png_to_bz2(input_file, output_file):
 
 if __name__ == '__main__':
 
-    input_file = 'stamp.png' # 元の画像
-    output_file = 'stamp.bz2' # bz2形式
+    input_file = STAMP_PNG # 元の画像
+    output_file = STAMP_BZ2 # bz2形式
     # 圧縮して，bz2とshapeを返す
     bz2_file, shape_file = compress_png_to_bz2(input_file, output_file)
     # bz2とshapeから画像を復元し，reportlabのImageReaderオブジェクトを返す

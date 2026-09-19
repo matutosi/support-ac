@@ -4,6 +4,20 @@
 名札と領収書の作成および発表番号やページ番号の生成と原稿との重ね合わせができます．
 名札は，氏名や所属と参加状況に合わせた名札を作成します．
 領収書は，参加費，懇親会費，研修会費などの領収書を作成します．
+学会誌の論文を J-STAGE に登載するための全文 XML の作成と，論文の一覧の取得もできます．
+
+## ディレクトリ構成
+
+```
+*_web.py        Streamlit の web アプリ (名札・領収書・重ね合わせ)
+*.py            名札・領収書・重ね合わせなどの本体
+paths.py        入出力のパス (assets/ と output/) をまとめたもの
+assets/         フォント・印影・名簿の見本 (名簿・領収書.xlsx)
+output/         生成した PDF・PNG (git では追跡しない)
+form/           申込フォーム (Google Apps Script)
+jstage/         J-STAGE 関係 (論文の一覧・全文 XML の調査・作業ディレクトリ)
+.claude/skills/pdf-to-jstage-xml/   論文 PDF から全文 XML を作る Claude Code のスキル
+```
 
 ## ライブラリのインストール
 
@@ -54,7 +68,12 @@ A4版(w210mm, h297mm, 左右余白: 各14mm, 上下余白: 各11mm)で10面(横2
 
 コードをカスタマイズすれば，名刺作成にも使えます．
 
-データを 名簿・領収書.xlsx というExcelに保存しておけば，以下のコマンドで名札を作成できます．
+データを assets/名簿・領収書.xlsx というExcelに保存しておけば，以下のコマンドで名札を作成できます．
+作成した PDF は output/ に保存されます．
+
+```
+python nameplate.py
+```
 
 
 ## 領収書の作成
@@ -62,8 +81,13 @@ A4版(w210mm, h297mm, 左右余白: 各14mm, 上下余白: 各11mm)で10面(横2
 receipt.py
 
 A4版で，参加費・懇親会費・研修会費などの領収書を印刷します．
-データを 名簿・領収書.xlsx というExcelに保存しておけば，以下のコマンドで領収書を作成できます．
-印影データはpng形式("stamp.png")もしくはpngをbz2形式で圧縮したものを用意します．
+データを assets/名簿・領収書.xlsx というExcelに保存しておけば，以下のコマンドで領収書を作成できます．
+作成した PDF は output/ に保存されます．
+印影データはpng形式("assets/stamp.png")もしくはpngをbz2形式で圧縮したものを用意します．
+
+```
+python receipt.py
+```
 
 
 
@@ -76,9 +100,10 @@ A4版で，参加費・懇親会費・研修会費などの領収書を印刷し
 
 ```{python}
 from image import compress_png_to_bz2, read_bz2 # ./image.py
+from paths import STAMP_PNG, STAMP_BZ2          # ./paths.py
 
-input_file = 'stamp.png' # 元の画像
-output_file = 'stamp.bz2' # bz2形式
+input_file = STAMP_PNG  # 元の画像 (assets/stamp.png)
+output_file = STAMP_BZ2 # bz2形式 (assets/stamp.bz2)
 
 # 圧縮して，bz2とshapeを返す
 bz2_file, shape_file = compress_png_to_bz2(input_file, output_file)
@@ -104,7 +129,7 @@ overlay_pdf.py
 
 ## Google Formの生成
 
-create_form.gs：form_questions.csv のデータをもとに Google フォームを生成するスクリプト
+form/create_form.gs：form/form_questions.csv のデータをもとに Google フォームを生成するスクリプト
 
 - 準備
   - form_questions.csv を Google Drive（マイドライブ直下）にアップロード
@@ -127,3 +152,31 @@ create_form.gs：form_questions.csv のデータをもとに Google フォーム
 - 注意
  - ファイルの提出は GAS で作成不可
  - Google Forms 編集画面から手動でファイルアップロード質問を追加する
+
+## J-STAGE 関係
+
+必要なライブラリは直下とは別に用意しています (直下の requirements.txt は web アプリ用のため)．
+
+```
+pip install -r jstage/requirements.txt
+```
+
+### 論文の一覧
+
+jstage/list_articles.py
+
+J-STAGE から学会誌の論文の一覧を取ります．
+
+```
+# 号の目次 (記事種別・題名・著者・書誌) を表示する
+python jstage/list_articles.py toc vegsci 41 2
+# サイト用の論文リスト (<li> の HTML) を出す．--vol・--no で絞れる
+python jstage/list_articles.py html --lang ja --out list_ja.html
+python jstage/list_articles.py html --lang en --out list_en.html
+```
+
+### 論文 PDF から全文 XML を作る
+
+Claude Code のスキル pdf-to-jstage-xml を使います．
+手順は .claude/skills/pdf-to-jstage-xml/SKILL.md，調査のまとめは jstage/pdf_to_jstage_xml.md にあります．
+作業ディレクトリは jstage/work/<巻>_<開始ページ>/ です (git では追跡しない)．

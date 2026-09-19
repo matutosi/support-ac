@@ -1,31 +1,37 @@
 # support-ac プロジェクト
 
-学会の大会運営を支援する Python スクリプト集．
+学会の大会運営と学会誌の J-STAGE 登載を支援するスクリプト集．
 名札・領収書の作成，発表番号やページ番号の生成と原稿への重ね合わせなどを行う．
 Streamlit の web 版 (`*_web.py`) もある．
+J-STAGE の論文の一覧の取得と，論文 PDF から全文 XML を作るスキルも置いてある
+(スキルは 2026-09-19 に congress_vs から移した)．
 
 ## 主なファイル
 
-- `nameplate.py` / `nameplate_web.py`，`1名札.py` … 名札の作成
-  (氏名・所属・参加状況に応じて出し分ける)
-- `receipt.py` / `receipt_web.py`，`2領収書.py` … 領収書の作成
-  (参加費・懇親会費・研修会費など)
+- `nameplate.py` / `nameplate_web.py` … 名札の作成 (氏名・所属・参加状況に応じて出し分ける)
+- `receipt.py` / `receipt_web.py` … 領収書の作成 (参加費・懇親会費・研修会費など)
 - `overlay_pdf.py` / `overlay_pdf_web.py` … 発表番号・ページ番号と原稿の重ね合わせ
-- `combine_pdf.py` … PDF の結合
-- `empty_page.py`，`draw_string.py`，`image.py`，`convert_pdf_to_png.py` … 補助
-- `jstage.py`，`xmltest.py` / `xmltest_en.py` … J-STAGE 投稿用の XML の作成・確認
-  (`xmltest*.py` は未追跡)
-- `create_form.gs`，`form_questions.csv` … 申込フォーム (Google Apps Script)
-- `名簿・領収書.xlsx` … 名札・領収書の入力データ
-- `data/` … 作業用データ (`adress.txt`，`file.dat`，`shape.dat`)
-- `GenShinGothic-Monospace-Medium.ttf` … 出力に使うフォント
-- `requirements.txt` … 依存パッケージ (版を固定してある)
-- `*.pdf` / `*.png` … 動作確認の入出力例
+- `combine_pdf.py`，`empty_page.py`，`draw_string.py`，`image.py`，`convert_pdf_to_png.py` … 補助
+- `paths.py` … 入出力のパス (`assets/`・`output/`) の定義．**パスはここにだけ書く**
+- `assets/` … フォント (源真ゴシック)・印影 (`stamp.*`)・名簿の見本 (`名簿・領収書.xlsx`．中身はダミー)
+- `output/` … 生成した PDF・PNG (追跡しない)
+- `form/` … 申込フォーム (`create_form.gs`・`form_questions.csv`)
+- `jstage/` … J-STAGE 関係
+  - `list_articles.py` … 号の目次 (`toc`) とサイト用の論文リスト (`html`)
+  - `pdf_to_jstage_xml.md` … PDF を J-STAGE 用の XML にする方法の調査
+  - `requirements.txt` … J-STAGE 関係の依存 (直下のものとは分けてある)
+  - `work/<巻>_<開始ページ>/` … スキルの作業ディレクトリ (追跡しない)
+- `.claude/skills/pdf-to-jstage-xml/` … 論文 PDF から J-STAGE の全文 XML を作るスキル (手順は `SKILL.md`)
+- `data/adress.txt` … 植生学会第30回大会の領収書の文面の控え (実際の値なので追跡しない)
+- `requirements.txt` … web アプリの依存 (版を固定してある．Streamlit Cloud が使う)
 
 ## 決めごと
 
 - **入力は Excel** で受け取る (書式は README に記載)．書式を変えたら README も直す．
 - 依存パッケージは `requirements.txt` で版を固定する (PyMuPDF・reportlab・pdfrw・streamlit など)．
+- **入口の `*_web.py` 3本は直下から動かさない**．Streamlit Cloud の公開アプリ (README の3つ) と
+  `.devcontainer` がこの場所を指している．
+- **公開リポジトリなので，実際の大会の値 (委員長名・事務局の住所など) は追跡しない**．コードの既定値はダミー．
 - 個人情報を含む実データ (参加者名簿) は追跡しない．
 - PDF 操作の汎用部分は [easypdf](../easypdf) と重なる．直すときは両方の整合を確認する．
 
@@ -54,14 +60,19 @@ Streamlit の web 版 (`*_web.py`) もある．
 
 ### 現在の状態
 
-- 2026-08-20 08:39
-  プロジェクト管理用の `.claude/CLAUDE.md` を新規に設置した．最終コミットは 2026-03-07．
-  **`README.md` に未コミットの変更があり，`create_form.gs`・`form_questions.csv` が
-  未追跡のまま残っている**．
+- 2026-09-19 09:10 (このセッション，x280-home)
+  **ファイル・ディレクトリ構造を整理し，J-STAGE の全文 XML 化のスキルを congress_vs から移した**．
+  素材は `assets/`，生成物は `output/`，パスは `paths.py` に集約．`jstage.py`・`xmltest*.py` は
+  `jstage/list_articles.py` にまとめた．web 版 3 本は AppTest で動作を確かめた．
+
 - それ以前は [notes/history.md](notes/history.md) を見る．
 
 ### 次にやること
 
-- 未コミットの変更と未追跡ファイル (申込フォーム関係) を整理してコミットする．
-- 新しく追加した `jstage.py`・`xmltest*.py` の使い方を README に書く．
-- `名簿・領収書.xlsx` に実データが入っているなら，追跡対象から外す．
+- **【次のタスク】スキル `pdf-to-jstage-xml` の独立検証 (手順 5) を，実行時のオプションで選べるようにする**
+  (2026-09-19 ユーザ指示)．選択肢は「検証不要」「opus (XML の作成と同じ) で検証」「fable で検証」．
+- `data/adress.txt` (植生学会の大会の領収書の文面) は，大会の運営を扱う congress_vs へ移すかを決める．
+- `draw_string.py` を単体で実行すると `KeyError: 'None'` で落ちる (デモがフォント名を渡していない)．
+  部品としては名札・領収書から正しく使えている．直すかは未定．
+- `requirements.txt` の固定版 (numpy 2.2.4・pandas 2.2.3 など) は Python 3.14 用のビルド済みパッケージが無い．
+  Streamlit Cloud の Python の版と合わせて，上げるかを決める．

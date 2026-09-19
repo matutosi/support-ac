@@ -122,6 +122,8 @@ def main():
     for f in list(r.iter("fig")) + list(r.iter("table-wrap")):
         cap = f.find("caption")
         refs[f.get("id")] = (f.findtext("label") or "") + " " + ("".join(cap.itertext())[:20] if cap is not None else "")
+    for f in r.iter("disp-formula"):
+        refs[f.get("id")] = "式 " + (f.findtext("label") or "")
 
     pages = work / "pages"
     if args.pdf:
@@ -133,7 +135,8 @@ def main():
             pg.get_pixmap(dpi=args.dpi).save(pages / f"p{pg.number + 1:03d}.png")
     o = [f"# 検証用資料: {xml.name}", "",
          f"- PDF のページ画像: `{pages}` (p001.png, p002.png, …)",
-         f"- 図表の画像: `{work / 'figs'}`・`{work / 'tables'}` (図表ごとの場所は下に書いた)", ""]
+         f"- 図表の画像: `{work / 'figs'}`・`{work / 'tables'}`，式の画像: `{work / 'formulas'}`"
+         " (図表・式ごとの場所は下に書いた)", ""]
 
     am = r.find("front/article-meta")
     o += ["## 書誌", ""]
@@ -190,6 +193,11 @@ def main():
                 o.append(f"**[図 {c.get('id')}] {c.findtext('label')}** {inline(c.find('caption/p'), refs)}")
                 o.append(f"  画像: `{img(g.get(XLINK))}`")
                 o.append("")
+            elif c.tag == "disp-formula":
+                o.append(f"**[式 {c.get('id')}] {c.findtext('label') or '(番号なし)'}**")
+                for g in c.findall("graphic"):
+                    o.append(f"  画像で掲載: `{img(g.get(XLINK))}`")
+                o.append("")
             elif c.tag == "table-wrap":
                 o.append(f"**[表 {c.get('id')}] {c.findtext('label')}** {inline(c.find('caption/p'), refs)}")
                 for g in c.findall("graphic"):
@@ -212,6 +220,7 @@ def main():
     n_x = len(list(r.iter("xref")))
     o += ["", "## 数", "",
           f"- 段落 {len(list(r.find('body').iter('p')))}，図 {len(list(r.iter('fig')))}，表 {len(list(r.iter('table-wrap')))}，"
+          f"式 {len(list(r.iter('disp-formula')))}，"
           f"文献 {len(list(back.iter('ref')))}，リンク {n_x}"]
 
     out = work / "review"

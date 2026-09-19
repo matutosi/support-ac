@@ -146,6 +146,10 @@ def check_rules(doc, xml_path):
     for f in r.xpath("//fig|//table-wrap"):
         if f.get("id") not in cited:
             errs.append(("注意", f"本文から参照されていない図表: {f.get('id')}"))
+    # 番号の付いた式は本文から参照されるはず (番号の無い式は参照されないのがふつう)
+    for f in r.xpath("//disp-formula[label]"):
+        if f.get("id") not in cited:
+            errs.append(("注意", f"本文から参照されていない式: {f.get('id')} {f.findtext('label')}"))
     # ファイル名と zip の中身 (zip の中の記事フォルダ名 = XML のファイル名 = 記事識別子)
     if m:
         if m["article"] != xml_path.stem:

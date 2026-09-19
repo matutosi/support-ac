@@ -445,13 +445,28 @@ def link_floats(text, floats):
     return re.sub(r"(図|表)(\s*)(\d+)((?:\s*[，,、]\s*\d+(?![\d.]))*)", rep, text)
 
 
+def link_formulas(text, floats):
+    """「式(1)」「式1」「(1)式」を別行立ての式へのリンクにする．
+
+    番号だけの「(1)」は，引用の番号や注の番号と紛れるのでリンクしない．"""
+    def rep(m):
+        num = m.group(2) or m.group(3)
+        key = "E" + num
+        if key not in floats:
+            return m.group(0)
+        return f"\x05{key}\x02{m.group(0)}\x03"
+    return re.sub(r"(式\s*\(?(\d+)\)?|\((\d+)\)\s*式)", rep, text)
+
+
 def para_xml(text, refs, floats, where):
     t = link_citations(text, refs, where)
     t = link_floats(t, floats)
+    t = link_formulas(t, floats)
     s = inline(esc(t))
     s = re.sub(r"\x01(B\d+)\x02(.*?)\x03", r'<xref ref-type="bibr" rid="\1">\2</xref>', s)
     s = re.sub(r"\x04(F\d+)\x02(.*?)\x03", r'<xref ref-type="fig" rid="\1">\2</xref>', s)
     s = re.sub(r"\x04(T\d+)\x02(.*?)\x03", r'<xref ref-type="table" rid="\1">\2</xref>', s)
+    s = re.sub(r"\x05(E\d+)\x02(.*?)\x03", r'<xref ref-type="disp-formula" rid="\1">\2</xref>', s)
     return s
 
 
@@ -471,9 +486,12 @@ def parse_body(path):
             blocks.append(("h", len(m.group(1)), m.group(2).strip()))
             i += 1
             continue
-        m = re.match(r"^:::(fig|table)\s+(\S+)\s+(\S+)(?:\s+(\S+))?\s*$", l)
+        m = re.match(r"^:::(fig|table|formula)\s+(\S+)(?:\s+(\S+))?(?:\s+(\S+))?\s*$", l)
         if m:
             kind, fid, label, file = m.groups()
+            if kind != "formula" and label is None:
+                REPORT.append(f"{kind} {fid} に番号 (図1・表1) が書かれていない")
+            label = label or ""
             j = i + 1
             content = []
             while j < len(lines) and lines[j].strip() != ":::":
@@ -526,7 +544,7 @@ def main():
             main_blocks.append(b)
 
     refs = [Ref(i + 1, t) for i, t in enumerate(ref_lines)]
-    floats = {b[1] for b in main_blocks if b[0] in ("fig", "table")}
+    floats = {b[1] for b in main_blocks if b[0] in ("fig", "table", "formula")}
     art_id = f"{meta['volume']}_{meta['fpage']}"
     out_dir = work / manifest.OUT
     out_dir.mkdir(exist_ok=True)
@@ -663,6 +681,10 @@ def build_body(blocks, refs, floats, work, names):
                 f"<list-item><p>{para_xml(marker.sub('', it), refs, floats, 'list')}</p></list-item>"
                 for it in b[1])
             out.append(f'<list list-type="{typ}">{items}</list>')
+        elif b[0] == "formula":
+            if [c for c in b[4] if c.strip() and not c.strip().startswith("<!--")]:
+                REPORT.append(f"{b[1]}: 式の枠の中身は使わない (式は画像で載せる)")
+            out.append(build_formula(b[1], b[2], b[3], work, names))
         elif b[0] in ("fig", "table"):
             kind, fid, label, file, content = b
             if kind == "fig":
@@ -680,6 +702,19 @@ def build_body(blocks, refs, floats, work, names):
         depth -= 1
     out.append("</body>")
     return "\n".join(out)
+
+
+def build_formula(fid, label, file, work, names):
+    """別行立ての式を画像で載せる (<disp-formula>)．
+
+    MathML は組まない (2026-09-19 の決めごと)．式番号は画像に入れず <label> に文字で持つ．"""
+    stem = Path(file).stem if file else "eq" + re.sub(r"\D", "", fid)
+    srcs = continued(work / "formulas", stem)
+    if not srcs:
+        REPORT.append(f"{fid}: 式の画像が無い (formulas/{stem}.png)")
+    graphics = "".join(f'<graphic xlink:href="{names.add(p)}"/>' for p in srcs)
+    lab = f"<label>{esc(label)}</label>" if label else ""
+    return f'<disp-formula id="{fid}">{lab}{graphics}</disp-formula>'
 
 
 def build_table(fid, label, content, refs, floats, work, names):

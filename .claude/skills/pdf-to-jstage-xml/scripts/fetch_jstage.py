@@ -134,6 +134,7 @@ def main():
     meta = {
         "source": base + "ja",
         "journal": journal,
+        "article_id": art,          # J-STAGE の記事識別子 (旧号は 13_KJ00006916281 のような形)
         "article_type": "要確認 (PDF 1ページ目の種別から)",
         "category": {"ja": cat or "要確認", "en": "要確認"},
         "lang": lang,

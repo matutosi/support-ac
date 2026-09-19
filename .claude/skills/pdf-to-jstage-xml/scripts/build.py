@@ -545,7 +545,8 @@ def main():
 
     refs = [Ref(i + 1, t) for i, t in enumerate(ref_lines)]
     floats = {b[1] for b in main_blocks if b[0] in ("fig", "table", "formula")}
-    art_id = f"{meta['volume']}_{meta['fpage']}"
+    # 記事識別子は J-STAGE の既存のもの (meta.yaml の article_id) を使う．無ければ「巻_開始ページ」
+    art_id = str(meta.get("article_id") or f"{meta['volume']}_{meta['fpage']}")
     out_dir = work / manifest.OUT
     out_dir.mkdir(exist_ok=True)
     if (work / "jstage").is_dir():

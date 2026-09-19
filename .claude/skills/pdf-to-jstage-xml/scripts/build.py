@@ -3,24 +3,30 @@
 使い方:
     python build.py <作業ディレクトリ> [--pdf <論文.pdf>]
 
+全文 PDF は作業ディレクトリの <記事識別子>.pdf を使う (--pdf で別の場所も指定できる)．
+
 出力 (作業ディレクトリ):
-    jstage/<資料コード>/<巻>/<号>/<記事識別子>/<記事識別子>.xml   ... 全文 XML
-                                               /<記事識別子>.pdf   ... 全文 PDF (--pdf を渡したとき)
-                                               /Graphics/          ... 図・表の画像
-    <記事識別子>.zip       ... 上の一式 (全文 XML 作成ツールの「インポート」か，編集登載の一括アップロードへ)
+    out/<記事識別子>.xml   ... 全文 XML
+    out/manifest.json      ... zip に入れるものの対応表 (manifest.py)
+    <記事識別子>.zip       ... 登載用の一式 (全文 XML 作成ツールの「インポート」か，編集登載の一括アップロードへ)
+                               中は「資料コード/巻/号/記事識別子/」に XML・PDF・Graphics/
     build_report.txt       ... リンクできなかった引用・図表など (手で確かめる箇所)
+
+「資料コード/巻/号/記事識別子/」の入れ子は zip の中にだけ作り，ディスク上には作らない．
+PDF と図表の画像も写さず，元のファイルから直接 zip へ入れる (画像は zip の中で別紙2の名前に改名する)．
 
 body.md の書き方は SKILL.md の「body.md の書式」を見る．
 """
 import argparse
 import html
 import re
-import shutil
 import sys
 import zipfile
 from pathlib import Path
 
 import yaml
+
+import manifest
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
 REPORT = []
@@ -522,17 +528,13 @@ def main():
     refs = [Ref(i + 1, t) for i, t in enumerate(ref_lines)]
     floats = {b[1] for b in main_blocks if b[0] in ("fig", "table")}
     art_id = f"{meta['volume']}_{meta['fpage']}"
-    out_dir = work / "jstage" / meta["journal"] / str(meta["volume"]) / str(meta["issue"]) / art_id
-    # 前回の出力は消さずに上書きする (Dropbox の同期などで PDF がつかまれていることがあるため)．
-    # 前回の画像だけは消す (図表の番号が変わったときに古い画像を残さないため)
-    (out_dir / "Graphics").mkdir(parents=True, exist_ok=True)
-    for old in (out_dir / "Graphics").glob("*"):
-        try:
-            old.unlink()
-        except OSError:
-            REPORT.append(f"前回の画像を消せない (使用中): {old.name}")
+    out_dir = work / manifest.OUT
+    out_dir.mkdir(exist_ok=True)
+    if (work / "jstage").is_dir():
+        REPORT.append("古い形の出力 jstage/ が残っている (いまは out/ と zip だけを作る)．要らなければ消す")
 
-    body_xml = build_body(main_blocks, refs, floats, work, out_dir, art_id)
+    names = GraphicNames(art_id)
+    body_xml = build_body(main_blocks, refs, floats, work, names)
     front = build_front(meta, prof, abstract_ja, refs, floats)
     back = build_back(ack, refs, sec_names)
     lang = meta.get("lang", "ja")
@@ -548,19 +550,17 @@ def main():
     (out_dir / f"{art_id}.xml").write_text(xml, encoding="utf-8")
     check_refs_text(out_dir / f"{art_id}.xml", refs)
     web_cmp = compare_web_refs(work, refs)
-    if args.pdf:
-        dst = out_dir / f"{art_id}.pdf"
-        if not (dst.exists() and dst.stat().st_size == Path(args.pdf).stat().st_size):
-            try:
-                shutil.copy(args.pdf, dst)
-            except OSError as e:
-                REPORT.append(f"全文 PDF を置けない (使用中など): {e}")
+    pdf = Path(args.pdf) if args.pdf else work / f"{art_id}.pdf"
+    if not pdf.exists():
+        REPORT.append(f"全文 PDF が無い: {pdf} (作業ディレクトリに {art_id}.pdf を置くか --pdf で渡す)")
+        pdf = None
+    elif pdf.resolve().parent != work.resolve():
+        REPORT.append(f"全文 PDF が作業ディレクトリの外にある: {pdf} (中に {art_id}.pdf として置く決まり)")
+    m = manifest.write(work, meta["journal"], meta["volume"], meta["issue"], art_id, pdf, names.items)
 
     zpath = work / f"{art_id}.zip"
     with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as z:
-        for f in sorted((work / "jstage").rglob("*")):
-            if f.is_file():
-                z.write(f, f.relative_to(work / "jstage"))
+        manifest.add_to_zip(z, work, m)
     (work / "build_report.txt").write_text("\n".join(REPORT) + "\n", encoding="utf-8")
     n_x = xml.count('ref-type="bibr"')
     print(f"XML: {out_dir / (art_id + '.xml')}")
@@ -622,14 +622,14 @@ class GraphicNames:
 
     J-STAGE 操作マニュアル 編集登載編 別紙2 の決まり．連番を0埋めすると書誌画面に番号順に並ぶ．
     図も，画像で載せる表も，ページをまたぐ続きの画像も，本文に出てくる順に1つの通し番号にする．
+    画像は写さず，(zip の中の名前, 元のファイル) を items に控える (manifest.py が zip へ入れる)．
     """
-    def __init__(self, art_id, out_dir):
-        self.art_id, self.out_dir, self.n = art_id, out_dir, 0
+    def __init__(self, art_id):
+        self.art_id, self.items = art_id, []
 
     def add(self, src):
-        self.n += 1
-        name = f"{self.art_id}_{self.n:02d}{src.suffix.lower()}"
-        shutil.copy(src, self.out_dir / "Graphics" / name)
+        name = f"{self.art_id}_{len(self.items) + 1:02d}{src.suffix.lower()}"
+        self.items.append((name, src))
         return name
 
 
@@ -640,10 +640,9 @@ def continued(dir_, stem):
     return [p for p in [first] + rest if p.exists()]
 
 
-def build_body(blocks, refs, floats, work, out_dir, art_id):
+def build_body(blocks, refs, floats, work, names):
     out = ["<body>"]
     depth = 0
-    names = GraphicNames(art_id, out_dir)
     for b in blocks:
         if b[0] == "h":
             level = b[1]

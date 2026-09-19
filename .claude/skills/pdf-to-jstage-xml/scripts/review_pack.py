@@ -1,7 +1,7 @@
 """別のエージェントに検証してもらうための資料を作る (手順 5: 独立検証の準備)．
 
 使い方:
-    python review_pack.py <記事識別子.xml> --work <作業ディレクトリ> --pdf <論文.pdf>
+    python review_pack.py <作業ディレクトリ>/out/<記事識別子.xml> --work <作業ディレクトリ> --pdf <論文.pdf>
 
 出力: <作業ディレクトリ>/review/review.md
     XML を人が読める形にしたもの．検証役はこれと PDF のページ画像 (pages/p*.png) だけを見比べる．
@@ -17,6 +17,8 @@ import re
 from pathlib import Path
 
 from lxml import etree
+
+import manifest
 
 XML_NS = "{http://www.w3.org/XML/1998/namespace}"
 XLINK = "{http://www.w3.org/1999/xlink}href"
@@ -108,7 +110,10 @@ def main():
     work = Path(args.work).resolve()
     doc = etree.parse(str(xml), etree.XMLParser(load_dtd=False, no_network=True))
     r = doc.getroot()
-    gdir = xml.parent / "Graphics"
+    # 図表の画像は写していないので，対応表 (manifest.json) で元のファイル (figs/・tables/) を示す
+    src = {name: work / f for name, f in manifest.read(work)["graphics"]}
+    def img(href):
+        return src.get(href, f"(対応表に無い: {href})")
 
     # リンクの行き先の表示 (文献は先頭 40 字，図表は番号と図題の先頭)
     refs = {}
@@ -128,7 +133,7 @@ def main():
             pg.get_pixmap(dpi=args.dpi).save(pages / f"p{pg.number + 1:03d}.png")
     o = [f"# 検証用資料: {xml.name}", "",
          f"- PDF のページ画像: `{pages}` (p001.png, p002.png, …)",
-         f"- 図表の画像: `{gdir}`", ""]
+         f"- 図表の画像: `{work / 'figs'}`・`{work / 'tables'}` (図表ごとの場所は下に書いた)", ""]
 
     am = r.find("front/article-meta")
     o += ["## 書誌", ""]
@@ -183,12 +188,12 @@ def main():
             elif c.tag == "fig":
                 g = c.find("graphic")
                 o.append(f"**[図 {c.get('id')}] {c.findtext('label')}** {inline(c.find('caption/p'), refs)}")
-                o.append(f"  画像: `{gdir / g.get(XLINK)}`")
+                o.append(f"  画像: `{img(g.get(XLINK))}`")
                 o.append("")
             elif c.tag == "table-wrap":
                 o.append(f"**[表 {c.get('id')}] {c.findtext('label')}** {inline(c.find('caption/p'), refs)}")
                 for g in c.findall("graphic"):
-                    o.append(f"  画像で掲載: `{gdir / g.get(XLINK)}`")
+                    o.append(f"  画像で掲載: `{img(g.get(XLINK))}`")
                 if c.find("table") is not None:
                     o.extend([""] + table_text(c.find("table"), refs))
                 for p in c.iter("table-wrap-foot"):

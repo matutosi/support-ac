@@ -1,7 +1,9 @@
 """J-STAGE 用の全文 XML を検証する (手順 4: 検証)．
 
 使い方:
-    python validate.py <記事識別子.xml>
+    python validate.py <作業ディレクトリ>/out/<記事識別子.xml>
+
+build.py が作った out/manifest.json と <記事識別子>.zip も見る (画像・PDF が zip に入っているか)．
 
 1. DTD (J-STAGE の JATS 1.1) で妥当性を見る．
    DTD 一式は初回だけ https://www.jstage.jst.go.jp/dtds/1.1/ から取り，スキルの dtd/ に置く
@@ -18,6 +20,8 @@ import urllib.request
 from pathlib import Path
 
 from lxml import etree
+
+import manifest
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
 DTD_DIR = SKILL_DIR / "dtd"
@@ -106,7 +110,15 @@ def check_rules(doc, xml_path):
             if rid not in ids:
                 errs.append(("エラー", f"xref の参照先が無い: {rid}"))
     # 画像
-    gdir = xml_path.parent / "Graphics"
+    # 画像のありかは build.py の対応表 (manifest.json) で分かる．zip の中の Graphics/ にあるかも見る
+    work = manifest.find_work(xml_path)
+    m = manifest.read(work) if work and (work / manifest.OUT / manifest.NAME).exists() else None
+    if m is None:
+        errs.append(("エラー", "out/manifest.json が無い (build.py で組み直す)"))
+    srcs = {name: work / src for name, src in m["graphics"]} if m else {}
+    in_zip = manifest.zip_names(work, m) if m else None
+    if m and in_zip is None:
+        errs.append(("エラー", f"{m['article']}.zip が無い (build.py で組み直す)"))
     for g in r.xpath("//graphic|//inline-graphic", namespaces=NS):
         href = g.get("{http://www.w3.org/1999/xlink}href")
         stem = xml_path.stem
@@ -116,8 +128,13 @@ def check_rules(doc, xml_path):
         if href and not href.startswith("abst-") and g.getparent().tag != "supplementary-material" \
                 and not re.fullmatch(re.escape(stem) + r"_\d+\.(jpe?g|gif|png|mp4)", href, re.I):
             errs.append(("エラー", f"画像名が「{stem}_連番.拡張子」の形でない (別紙2): {href}"))
-        if g.getparent().tag != "supplementary-material" and href and not (gdir / href).exists():
-            errs.append(("エラー", f"Graphics に画像が無い: {href}"))
+        if g.getparent().tag != "supplementary-material" and href and m:
+            if href not in srcs:
+                errs.append(("エラー", f"対応表 (manifest.json) に画像が無い: {href}"))
+            elif not srcs[href].exists():
+                errs.append(("エラー", f"画像の元のファイルが無い: {href} ← {srcs[href]}"))
+            if in_zip is not None and f"Graphics/{href}" not in in_zip:
+                errs.append(("エラー", f"zip の Graphics/ に画像が無い: {href}"))
         if href and not re.search(r"\.(jpe?g|gif|png)$", href, re.I):
             errs.append(("エラー", f"画像の拡張子は jpg・gif・png だけ: {href}"))
     # 使われていない文献・図表
@@ -129,11 +146,16 @@ def check_rules(doc, xml_path):
     for f in r.xpath("//fig|//table-wrap"):
         if f.get("id") not in cited:
             errs.append(("注意", f"本文から参照されていない図表: {f.get('id')}"))
-    # ファイル名
-    if xml_path.parent.name != xml_path.stem:
-        errs.append(("エラー", f"フォルダ名と XML のファイル名 (記事識別子) が違う: {xml_path.parent.name} / {xml_path.stem}"))
-    if not (xml_path.parent / f"{xml_path.stem}.pdf").exists():
-        errs.append(("注意", "全文 PDF (記事識別子.pdf) が同じフォルダに無い"))
+    # ファイル名と zip の中身 (zip の中の記事フォルダ名 = XML のファイル名 = 記事識別子)
+    if m:
+        if m["article"] != xml_path.stem:
+            errs.append(("エラー", f"対応表の記事識別子と XML のファイル名が違う: {m['article']} / {xml_path.stem}"))
+        if not m["pdf"]:
+            errs.append(("注意", f"全文 PDF が無い (作業ディレクトリに {xml_path.stem}.pdf を置いて組み直す)"))
+        if in_zip is not None:
+            for need in [f"{xml_path.stem}.xml"] + ([f"{xml_path.stem}.pdf"] if m["pdf"] else []):
+                if need not in in_zip:
+                    errs.append(("エラー", f"zip の {manifest.prefix(m)}/ に {need} が無い"))
     return errs
 
 

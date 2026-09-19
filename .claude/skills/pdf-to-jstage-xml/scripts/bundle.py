@@ -7,7 +7,8 @@
 
 出力: <出力先フォルダ>/<資料コード>.zip
     中身は「資料コード/巻/号/記事識別子/」(J-STAGE 操作マニュアル 編集登載編 別紙2)．
-    各作業ディレクトリの jstage/ の下 (build.py の出力) を集める．
+    各作業ディレクトリの out/manifest.json (build.py の出力) をもとに，元のファイルから直接集める．
+    まとめた zip は登載が済んだら消してよい (いつでも作り直せる)．
 
 マニュアルで確かめたこと (編集登載編「13. 記事アップロード」と別紙2．2026-09-19):
     - 1回のアップロードは1つの資料．zip の名前は {資料コード}.zip
@@ -23,6 +24,8 @@ import sys
 import zipfile
 from pathlib import Path
 
+import manifest
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -33,21 +36,21 @@ def main():
                          "アップロード画面で選ぶ種類の控え．zip の中身は同じ")
     args = ap.parse_args()
 
-    articles = []          # (資料コード, 巻, 号, 記事識別子, 記事フォルダ)
+    articles = []          # (資料コード, 巻, 号, 記事識別子, 作業ディレクトリ, 対応表)
     problems = []
     for w in args.works:
-        root = Path(w) / "jstage"
-        found = [p for p in root.glob("*/*/*/*") if p.is_dir()]
-        if not found:
-            problems.append(f"{w}: jstage/ の下に記事が無い (build.py を先に実行する)")
+        w = Path(w)
+        if not (w / manifest.OUT / manifest.NAME).exists():
+            problems.append(f"{w}: out/manifest.json が無い (build.py を先に実行する)")
             continue
-        for d in found:
-            code, vol, iss, art = d.relative_to(root).parts
-            if not (d / f"{art}.xml").exists():
-                problems.append(f"{d}: {art}.xml が無い")
-            if not (d / f"{art}.pdf").exists():
-                problems.append(f"{d}: {art}.pdf が無い (build.py に --pdf を渡す)")
-            articles.append((code, vol, iss, art, d))
+        m = manifest.read(w)
+        art = m["article"]
+        if not m["pdf"]:
+            problems.append(f"{w}: 全文 PDF が無い (作業ディレクトリに {art}.pdf を置いて build.py をやり直す)")
+        for src, name in manifest.members(w, m):
+            if not src.exists():
+                problems.append(f"{w}: {name} の元のファイルが無い: {src}")
+        articles.append((m["journal"], m["volume"], m["issue"], art, w, m))
 
     codes = {a[0] for a in articles}
     if len(codes) > 1:
@@ -69,11 +72,8 @@ def main():
     zpath = out / f"{code}.zip"
     n_files = 0
     with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as z:
-        for code_, vol, iss, art, d in sorted(articles, key=lambda a: (int(a[1]), int(a[2]), a[3])):
-            for f in sorted(d.rglob("*")):
-                if f.is_file():
-                    z.write(f, Path(code_, vol, iss, art, f.relative_to(d)))
-                    n_files += 1
+        for code_, vol, iss, art, w, m in sorted(articles, key=lambda a: (int(a[1]), int(a[2]), a[3])):
+            n_files += manifest.add_to_zip(z, w, m)
 
     print(f"zip: {zpath}  記事 {len(articles)} 本，ファイル {n_files} 個，{zpath.stat().st_size / 1e6:.1f} MB")
     by = collections.defaultdict(list)

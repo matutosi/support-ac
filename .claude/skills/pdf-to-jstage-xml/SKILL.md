@@ -13,7 +13,20 @@ argument-hint: "<論文.pdf または記事の URL> [--review none|opus|fable]"
 
 - Python 3 と `pip install pymupdf lxml pyyaml`
 - 対象の雑誌の設定 `journals/<資料コード>.yaml` があること (いまは `vegsci.yaml` だけ)
-- 作業ディレクトリは `support-ac/jstage/work/<巻>_<開始ページ>/` にする (git では追跡しない)
+- 作業ディレクトリは `support-ac/jstage/work/<巻>_<開始ページ>/` にする (git では追跡しない)．
+  **論文の PDF はその中に `<巻>_<開始ページ>.pdf` として置く** (外に置かない．`build.py` が既定でここを見る)．
+- **作業ディレクトリの中に写しや入れ子を作らない** (2026-09-19 ユーザ指示)．J-STAGE が求める
+  「資料コード/巻/号/記事識別子/」の入れ子は zip の中の名前にだけ付け，PDF と図表の画像は元のファイルから
+  直接 zip へ入れる (`scripts/manifest.py`)．できあがる形:
+  ```
+  jstage/work/37_37/
+    37_37.pdf               論文の PDF (入力．全文 PDF としてそのまま zip に入る)
+    body.md・meta.yaml ほか  下書き (手順 1〜2)
+    pages/・figs/・tables/   ページ画像・図表の画像 (手順 1)
+    out/37_37.xml           全文 XML (手順 3)
+    out/manifest.json       zip に入れるものの対応表 (手順 3)
+    37_37.zip               登載用の一式 (手順 3．中は vegsci/37/1/37_37/ に XML・PDF・Graphics/)
+  ```
 
 ## 実行時のオプション
 
@@ -25,7 +38,7 @@ argument-hint: "<論文.pdf または記事の URL> [--review none|opus|fable]"
 | `--review opus` | 「opus で検証」「XML の作成と同じモデルで」 | 検証役を `model: opus` で起動する |
 | `--review fable` | 「fable で検証」 | 検証役を `model: fable` で起動する |
 
-- 例: `/pdf-to-jstage-xml jstage/work/37_37.pdf --review fable`
+- 例: `/pdf-to-jstage-xml jstage/work/37_37/37_37.pdf --review fable`
 - **指定が無いときは，手順 0 に入る前に AskUserQuestion で1回だけ聞く**．選択肢は上の3つで，
   手順 5 の表の利点・欠点を添える．「(推奨)」を付けるのは **XML を作ったのと別のモデル**
   (ユーザー設定「書き手と評価者でモデルを変える」)．**`none` には推奨を付けない**．
@@ -52,7 +65,7 @@ python $S/fetch_jstage.py <記事の URL> --out W
 ### 1. PDF から下書きを作る
 
 ```
-python $S/extract.py <論文.pdf> --journal vegsci --out W
+python $S/extract.py W/<記事識別子>.pdf --journal vegsci --out W
 ```
 
 - `body.md` (本文・謝辞・摘要・引用文献)，`pages/` (ページ画像)，`figs/`・`tables/` (図表の画像)，
@@ -75,7 +88,7 @@ python $S/extract.py <論文.pdf> --journal vegsci --out W
 5. **斜体・上付き・下付き**: 学名は `*斜体*`，`m^2^`，`CO~2~`．
 6. **表**: `:::table` の枠に表を組む．まず下書きを作る．
    ```
-   python $S/table_draft.py <論文.pdf> <ページ> --clip x0,y0,x1,y1 [--no-merge] [--cols x,x,...] [--key-col K]
+   python $S/table_draft.py W/<記事識別子>.pdf <ページ> --clip x0,y0,x1,y1 [--no-merge] [--cols x,x,...] [--key-col K]
    ```
    - `--clip` は `report.txt` の「tableN の枠」をもとに，**見出しの行を除いた範囲**にする．
    - 左端の列を空けた行がある統計表は `--no-merge` (行を前の行につながない)．
@@ -99,11 +112,15 @@ python $S/extract.py <論文.pdf> --journal vegsci --out W
 ### 3. XML に組む
 
 ```
-python $S/build.py W --pdf <論文.pdf>
+python $S/build.py W
 ```
 
-- `W/jstage/<資料コード>/<巻>/<号>/<記事識別子>/` に XML・PDF・`Graphics/` を置き，`W/<記事識別子>.zip` にまとめる．
-  画像の名前は `{記事識別子}_01.png` からの通し番号 (図・画像で載せる表・ページをまたぐ続きの画像を出てくる順に)．
+- `W/out/<記事識別子>.xml` と対応表 `W/out/manifest.json` を書き，`W/<記事識別子>.zip` にまとめる．
+  zip の中は `<資料コード>/<巻>/<号>/<記事識別子>/` に XML・PDF・`Graphics/`．
+- 全文 PDF は `W/<記事識別子>.pdf` を使う (別の場所なら `--pdf` で渡せるが，中に置く決まり)．写しは作らない．
+- 画像は写さず，`figs/`・`tables/` の元のファイルを zip の中で `{記事識別子}_01.png` からの通し番号に改名して入れる
+  (図・画像で載せる表・ページをまたぐ続きの画像を出てくる順に)．
+- 古い形の出力 (`W/jstage/` の入れ子) が残っていれば `build_report.txt` に出る．消してよい．
 - `refs_web.txt` があれば，引用文献をウェブ版と照合し，中身の違いを `build_report.txt` に書く．
 - `build_report.txt` に，リンクできなかった引用・分解できなかった文献・画像で代用した表が出る．
   **引用でない年** (群集名の命名者 `Nozaki et al. 1998` など) が出ることもある．それはそのままでよい．
@@ -112,11 +129,12 @@ python $S/build.py W --pdf <論文.pdf>
 ### 4. 検証する
 
 ```
-python $S/validate.py W/jstage/vegsci/31/2/31_193/31_193.xml
+python $S/validate.py W/out/31_193.xml
 ```
 
 - DTD (J-STAGE の JATS 1.1) と，DTD で分からない J-STAGE の規則 (必須項目・文字数・ID の参照・画像の有無・
-  日英そろいの著作権・参照されていない文献や図表) を見る．DTD 一式は初回だけ取得して `dtd/` に置く．
+  日英そろいの著作権・参照されていない文献や図表) を見る．
+  zip の中に XML・PDF・画像がそろっているかも見る (登載するのは zip なので)．DTD 一式は初回だけ取得して `dtd/` に置く．
 - **エラー 0 を目標にする**．「注意」の「参照されていない文献」は，表の中でだけ引かれている文献が
   表を画像で代用しているときに出る．表を組めば消える．
 
@@ -129,7 +147,7 @@ XML を作ったエージェントとは**別のエージェント**に，PDF �
 
 1. 検証用の資料を作る．
    ```
-   python $S/review_pack.py W/jstage/<資料コード>/<巻>/<号>/<記事識別子>/<記事識別子>.xml --work W --pdf <論文.pdf>
+   python $S/review_pack.py W/out/<記事識別子>.xml --work W --pdf W/<記事識別子>.pdf
    ```
    `W/review/review.md` (XML を読める形にしたもの．リンクの行き先と文献の分解結果つき) と，
    検証用の 200dpi のページ画像 `W/review/pages/` ができる．
@@ -175,6 +193,8 @@ python $S/bundle.py W1 W2 W3 --out <出力先> [--kind update|new]
 ```
 
 - `<資料コード>.zip` (中は `資料コード/巻/号/記事識別子/`) ができる．1つの zip には1つの資料だけ．
+  各作業ディレクトリの `out/manifest.json` をもとに元のファイルから組む．
+  **まとめた zip は登載が済んだら消してよい** (いつでも作り直せる．例の出力先は `jstage/work/_bundle/`)．
 - 編集登載編「13. 記事アップロード」と別紙2 (2026-09-19 に確かめた):
   号のフォルダに複数の記事，巻のフォルダに複数の号を入れてよい．**複数の巻を入れてよいかは明記が無い**
   ので，`bundle.py` が警告を出す．最初は1巻ずつか少ない本数で試す．

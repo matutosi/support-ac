@@ -428,9 +428,12 @@ def auto_citations(text, refs, where):
 
 
 def link_floats(text, floats):
-    """「図1」「表1」を図表へのリンクにする．「図2，3，4」「図3, 4」の2つ目以降の番号もリンクする．"""
+    """「図1」「表1」を図表へのリンクにする．「図2，3，4」「図3, 4」の2つ目以降の番号もリンクする．
+
+    1990 年代の号のように，和文の中で「Fig. 1」「Table 1」と英語で呼ぶ論文もある．
+    """
     def one(kind, num, shown):
-        key = ("F" if kind == "図" else "T") + num
+        key = ("F" if kind == "図" or kind.startswith("Fig") else "T") + num
         if key not in floats:
             REPORT.append(f"本文の {kind}{num} に対応する図表が無い")
             return shown
@@ -442,7 +445,7 @@ def link_floats(text, floats):
         for mm in re.finditer(r"(\s*[，,、]\s*)(\d+)", m.group(4)):
             out += mm.group(1) + one(kind, mm.group(2), mm.group(2))
         return out
-    return re.sub(r"(図|表)(\s*)(\d+)((?:\s*[，,、]\s*\d+(?![\d.]))*)", rep, text)
+    return re.sub(r"(図|表|Fig\.|Fig|Table)(\s*)(\d+)((?:\s*[，,、]\s*\d+(?![\d.]))*)", rep, text)
 
 
 def link_formulas(text, floats):
@@ -486,9 +489,16 @@ def parse_body(path):
             blocks.append(("h", len(m.group(1)), m.group(2).strip()))
             i += 1
             continue
-        m = re.match(r"^:::(fig|table|formula)\s+(\S+)(?:\s+(\S+))?(?:\s+(\S+))?\s*$", l)
+        # 枠の見出し: `:::fig F1 図1 fig1.png`．番号の言い方が「Fig. 1」のように
+        # 空白を含むこともあるので，画像のファイル名を末尾から外し，残りを番号とする
+        m = re.match(r"^:::(fig|table|formula)\s+(\S+)(?:\s+(.*?))?\s*$", l)
         if m:
-            kind, fid, label, file = m.groups()
+            kind, fid, rest = m.groups()
+            label, file = (rest or "").strip(), None
+            mf = re.search(r"\s(\S+\.(?:png|jpg|jpeg|gif|tif|tiff))$", " " + label, re.I)
+            if mf:
+                file = mf.group(1)
+                label = label[: len(label) - len(file)].strip()
             if kind != "formula" and label is None:
                 REPORT.append(f"{kind} {fid} に番号 (図1・表1) が書かれていない")
             label = label or ""

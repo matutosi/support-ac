@@ -224,13 +224,19 @@ def float_runs(rows):
     return runs
 
 
-def cap_text(rows, i, cap_pat):
-    """キャプションの行と，その続き (次の本文・キャプションまで) をつないで返す．"""
+def cap_text(rows, i, cap_pat, body_x=None):
+    """キャプションの行と，その続きをつないで返す．
+
+    図題の2行目以降は本文と同じくらいの幅があるので，幅では本文と見分けられない．
+    **行頭の位置**で見分ける (図題の塊は本文より少し右から始まる)．
+    """
+    cap_x = rows[i]["rect"].x0
     parts = [rows[i]["text"]]
     for r in rows[i + 1:]:
-        if r["kind"] in ("body", "cap", "head", "head2"):
+        if r["kind"] in ("cap", "head", "head2"):
             break
-        if r["rect"].x0 > rows[i]["rect"].x1:
+        indented = body_x is None or abs(r["rect"].x0 - body_x) > 4
+        if abs(r["rect"].x0 - cap_x) > 5 or not indented:
             break
         parts.append(r["text"])
         r["kind"] = "capcont"
@@ -307,7 +313,7 @@ def main():
                 r["text"] = normalize(r["raw"])
             rows = [r for r in rows if r["text"]]
             if rows:
-                rows[0]["bounds"] = classify(rows, g["colw"], cap_pat)[1:]
+                rows[0]["bounds"] = classify(rows, g["colw"], cap_pat)
             cols.append(rows)
 
         # 90 度回した図表のページ (OCR が字を横に読んでしまい，意味のある字にならない)
@@ -337,13 +343,21 @@ def main():
                             o["kind"] = "capcont"
                             REPORT.append(f"p{pno}: {r['text'][:12]} の題が段をまたぐ．2段の図表とみなす")
 
+        # 図題の続きの行に先に印を付ける (そうしないと，下にある図の枠が
+        # 上の図の図題まで伸びて，画像に図題が写り込む)
+        caps = {}
+        for rows in cols:
+            for i, r in enumerate(rows):
+                if r.get("kind") == "cap":
+                    caps[id(r)] = cap_text(rows, i, cap_pat, rows[0]["bounds"][0])
+
         # 図表: キャプションの位置から枠を決めて切り出す (スキャンには画像・罫線の情報が無い)
         for rows in cols:
             if not rows:
                 continue
-            col_x0, col_x1 = rows[0]["bounds"]
+            body_x, col_x0, col_x1 = rows[0]["bounds"]
             for run in float_runs(rows):
-                label, cap_body, num = cap_text(rows, run["cap"], cap_pat)
+                label, cap_body, num = caps[id(rows[run["cap"]])]
                 kind = run["kind"]
                 fig_n[kind] += 1
                 cap_r = rows[run["cap"]]["rect"]
@@ -354,6 +368,18 @@ def main():
                 if partner:
                     cap_body = join_text(cap_body, partner["text"])
                     cap_r = pymupdf.Rect(cap_r) | partner["rect"]
+                # 図題の2行目以降も枠から外す (表題の下から切り出すため)．
+                # 行頭が図題とそろい，すぐ下にある行を図題の続きとみなす
+                grown = True
+                while grown:
+                    grown = False
+                    for g in cols:
+                        for r in g:
+                            if (abs(r["rect"].x0 - cap_r.x0) <= 8 and r["rect"].y1 > cap_r.y1
+                                    and r["rect"].y0 - cap_r.y1 < 14):
+                                cap_r = pymupdf.Rect(cap_r) | r["rect"]
+                                r["kind"] = "capcont"
+                                grown = True
                 # 2段にまたがる図表は，中身の行が本文と見分けられないので紙面の端までを枠にする．
                 # そうでなければ前後の本文の行までを枠にし，段の外 (隣の段の字・ノンブル) は入れない
                 top = 30 if wide else max(rows[run["a"] - 1]["rect"].y1 + 4 if run["a"] > 0 else 30,

@@ -1,6 +1,6 @@
 ---
 name: pdf-to-jstage-xml
-description: 学会誌の論文 PDF (原稿なし) から，J-STAGE に登載する全文 XML (JATS 1.1，FULL-J) を作るスキル。書誌と引用文献は J-STAGE の記事ページ (日英) から取り，本文・図表は PDF の文字の位置と書体から下書きを作り，AI がページ画像と照合して直し，スクリプトで XML に組んで DTD と J-STAGE の規則で検証し，登載用の zip にまとめる。本文の「著者 年」形式の引用と「図1」「表1」は自動でリンクする。いまは植生学会誌 (vegsci) の設定だけがあり，他誌は journals/ に設定を足す。ユーザーが「J-STAGE の XML を作って」「全文 XML にして」「PDF から JATS に」「植生学会誌の論文を全文 HTML に」などと言ったときに使う。
+description: 学会誌の論文 PDF (原稿なし) から，J-STAGE に登載する全文 XML (JATS 1.1，FULL-J) を作るスキル。書誌と引用文献は J-STAGE の記事ページ (日英) から取り，本文・図表は PDF の文字の位置と書体から下書きを作り (スキャンした旧号は行の並びから)，AI がページ画像と照合して直し，スクリプトで XML に組んで DTD と J-STAGE の規則で検証し，登載用の zip にまとめる。本文の「著者 年」形式の引用と「図1」「表1」は自動でリンクする。いまは植生学会誌 (vegsci) の設定だけがあり，他誌は journals/ に設定を足す。ユーザーが「J-STAGE の XML を作って」「全文 XML にして」「PDF から JATS に」「植生学会誌の論文を全文 HTML に」などと言ったときに使う。
 argument-hint: "<論文.pdf または記事の URL> [--review none|opus|fable|sonnet]"
 ---
 
@@ -14,7 +14,12 @@ argument-hint: "<論文.pdf または記事の URL> [--review none|opus|fable|so
 - Python 3.11 以上と `pip install pymupdf lxml pyyaml` (スクリプトは 3.11 で構文を確かめてある)
 - 対象の雑誌の設定 `journals/<資料コード>.yaml` があること (いまは `vegsci.yaml` だけ)
 - 作業ディレクトリは `support-ac/jstage/work/<巻>_<開始ページ>/` にする (git では追跡しない)．
-  **論文の PDF はその中に `<巻>_<開始ページ>.pdf` として置く** (外に置かない．`build.py` が既定でここを見る)．
+  **論文の PDF はその中に `<記事識別子>.pdf` として置く** (外に置かない．`build.py` が既定でここを見る)．
+- **記事識別子は J-STAGE の既存のものを使う**．新しい号は `31_193` (巻_開始ページ) だが，
+  2000 年代より前の号は `13_KJ00006916281` のような NII 由来の形で，登載ではそちらが要る．
+  `fetch_jstage.py` が記事の URL から `meta.yaml` の `article_id` に書き，`build.py` がそれを使う．
+  手で引くときは対応表を使う (`python jstage/article_ids.py get 13_1` → `13_KJ00006916281`，逆も可．
+  表に無ければ `python jstage/article_ids.py update --vol 13`)．
 - **作業ディレクトリの中に写しや入れ子を作らない** (2026-09-19 ユーザ指示)．J-STAGE が求める
   「資料コード/巻/号/記事識別子/」の入れ子は zip の中の名前にだけ付け，PDF と図表の画像は元のファイルから
   直接 zip へ入れる (`scripts/manifest.py`)．できあがる形:
@@ -72,8 +77,19 @@ python $S/fetch_jstage.py <記事の URL> --out W
 
 ### 1. PDF から下書きを作る
 
+**PDF が2種類ある**．どちらかを1回だけ実行する．
+
+| 号 | PDF | 使うもの |
+|---|---|---|
+| 2000 年代以降 | DTP で組んだもの (書体が複数・図は画像や罫線で入っている) | `extract.py` |
+| 1990 年代まで | **紙をスキャンして OCR をかけたもの** (書体が1種類・ページ全体が1枚の画像) | `extract_scan.py` |
+
+見分け方: `python -c "import pymupdf;d=pymupdf.open('W/x.pdf');print({s['font'] for b in d[0].get_text('dict')['blocks'] if b['type']==0 for l in b['lines'] for s in l['spans']})"`
+で書体が1つ (例: `MS-Gothic`) だけならスキャン．`extract.py` を掛けると本文が数行しか取れないのでも分かる．
+
 ```
-python $S/extract.py W/<記事識別子>.pdf --journal vegsci --out W
+python $S/extract.py W/<記事識別子>.pdf --journal vegsci --out W          # 新しい号
+python $S/extract_scan.py W/<記事識別子>.pdf --journal vegsci --out W     # 旧号 (スキャン)
 ```
 
 - `body.md` (本文・謝辞・摘要・引用文献)，`pages/` (ページ画像)，`figs/`・`tables/` (図表の画像)，
@@ -84,6 +100,29 @@ python $S/extract.py W/<記事識別子>.pdf --journal vegsci --out W
   作り直すときは，手で直した所を `body.new.md` に移してから置き換える．上書きは `--force`．
 - **図・表の画像には図題 (表題) を入れない**．図題は XML の `<caption>` に文字で持ち，J-STAGE が画像の下に
   表示する (調査は `jstage/pdf_to_jstage_xml.md` の8節)．画像は図題の手前で切り出す．
+
+#### 旧号 (スキャン + OCR) のとき
+
+`extract_scan.py` は上と同じもの (`body.md`・`pages/`・`figs/`・`tables/`・`report.txt`) に加えて，
+`ocr.md` (ページ・段ごとの行と座標) を書く．次の点が新しい号と違う．
+
+- **OCR の誤りが残る**．和文は 99% ほど合うが (13(1):1 で1ページ十数字)，**欧文の引用文献は崩れる**
+  (誌名が `C α nadian／burnal of BotanJ` など)．`report.txt` の「OCR 要確認」を手がかりに，
+  **ページ画像を見て直す**のは手順 2 の仕事．
+- **斜体の情報が無い** (書体が1種類のため)．学名・誌名の `*斜体*` は**ページ画像を見て付ける**．
+- **小型大文字 (small caps) は，ふつうの大文字・小文字に直して書く** (`OLMSTEAD` → `Olmstead`)．
+  組み方の違いであって内容の違いではない．本文の引用と引用文献の両方で同じにそろえる．
+- **表は OCR がほとんど読めていない**．大きな表 (数十行) は `@image` で画像のまま載せてよい．
+- **90 度回した表のページ**は行の高さで見分けて `tables/table_p<ページ>.png` にする．
+  これは**ページ全体**なので，表題とノンブルまで入っている．`crop.py` で**表の本体だけに切り直し**，
+  **番号どおりの名前にして** (`table3.png`)，`body.md` に枠を手で入れる
+  (13(1):1 の例: `python $S/crop.py W --pdf W/<記事識別子>.pdf --page 8 --rect 62,82,560,806 --out tables/table3.png --dpi 200`)．
+  縦組みの表題は画像に入れない (図題・表題は XML の文字で持つ決まり)．
+- **図表の枠は当てずっぽうになりやすい**．`report.txt` の「…の枠」の行を見て，
+  切り出した画像を**必ず開いて確かめる**．ずれていたら `crop.py` で取り直す．
+- J-STAGE に登録ずみの引用文献 (`refs_web.txt`) は，旧号では**件数も並びも本文と合わない**ことがある
+  (13(1):1 は PDF 26 件・ウェブ 24 件)．**正は PDF**．`build_report.txt` の照合は参考にとどめる．
+- 1990 年代の号は，和文の中で図表を「Fig. 1」「Table 1」と英語で呼ぶ．`build.py` はこれもリンクする．
 
 ### 2. AI が照合して直す (ここだけが手作業)
 
@@ -292,13 +331,15 @@ python $S/bundle.py W1 W2 W3 --out <出力先> [--kind update|new]
 - 調査のまとめは `support-ac/jstage/pdf_to_jstage_xml.md`．
 - 規格: 「J-STAGE XML データフォーマットガイドライン (JATS1.1 版)」第 2.4 版 (2026-07-30)，
   「J-STAGE XML(JATS1.1) メタデータ項目一覧」，全文 XML の見本 `fullj_johokanri.zip`．
-- 植生学会誌の3本で最後まで通した (2026-09-19)．どれも DTD 妥当・J-STAGE の規則のエラー 0・注意 0．
+- 植生学会誌の4本で最後まで通した (2026-09-19，13(1):1 は 2026-09-20)．
+  どれも DTD 妥当・J-STAGE の規則のエラー 0・注意 0．
 
   | 論文 | 種別・年 | ページ | 図・表 | 文献 | 文献リンク | 残った要確認 |
   |---|---|---|---|---|---|---|
   | 31(2): 193 | 総説・2014 | 26 | 1・2 | 225 | 409 | 群集名の命名者 (引用でない) 1 |
   | 42(2): 59 | 原著・2025 | 15 | 8・3 (表1 は2ページの常在度表で `@image`) | 59 | 98 | 0 |
   | 37(1): 37 | 短報・2020 | 9 | 4・2 (表1 は縦に2ページ，表2 は見開き) | 21 | 45 | 0 (原文の表記揺れ2か所は手でリンク) |
+  | 13(1): 1 | 原著・1996 | 10 | 2・3 (**スキャン + OCR**．表3つは `@image`．表3 は 90 度回したページ) | 26 | 39 | 0 (原文に無い引用2件はリンクできない) |
 
 - 年代による違いとして対処したもの: 本文の字 (2014 年 9.9pt，2025 年 9.2pt)，本文が1ページ目の要旨の下から
   始まる号，キャプションが本文と同じ大きさの号，「原著」「原著論文」の両方の書き方，年だけの発行日，

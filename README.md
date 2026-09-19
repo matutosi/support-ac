@@ -26,15 +26,14 @@ jstage/         J-STAGE 関係 (論文の一覧・全文 XML の調査・作業�
 ```
 pip install -r requirements.txt
 # or
-pip install PyMuPdf
-pip install numpy==2.2.4
+pip install PyMuPDF==1.28.2
+pip install numpy==2.3.5
 pip install openpyxl==3.1.5
-pip install pandas==2.2.3
+pip install pandas==2.3.3
 pip install pdfrw==0.4
-pip install Pillow==11.1.0
-pip install reportlab==4.3.1
-pip install streamlit==1.43.2
-pip install reportlab==4.3.1                                                   
+pip install Pillow==12.3.0
+pip install reportlab==4.5.1
+pip install streamlit==1.64.0
 ```
 
 ## 名札と領収書用のデータ

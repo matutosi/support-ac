@@ -1,4 +1,4 @@
-import fitz
+import pymupdf as fitz  # PyMuPDF (1.28 から fitz の名前は非推奨)
 
 def combine_pdfs(pdf_list, output="combined.pdf"):
     """

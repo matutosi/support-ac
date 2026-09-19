@@ -1,4 +1,4 @@
-import fitz  # PyMuPdf
+import pymupdf as fitz  # PyMuPDF (1.28 から fitz の名前は非推奨)
 from PIL import Image, ImageOps
 
 def convert_pdf_to_png(pdf_path):

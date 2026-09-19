@@ -1,4 +1,4 @@
-import fitz  # PyMuPdf
+import pymupdf as fitz  # PyMuPDF (1.28 から fitz の名前は非推奨)
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas

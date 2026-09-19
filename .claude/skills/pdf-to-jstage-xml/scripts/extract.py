@@ -26,6 +26,11 @@ import yaml
 SKILL_DIR = Path(__file__).resolve().parent.parent
 
 
+def as_list(v):
+    """設定の節の見出しは，文字列でも並びでも書ける (「引用文献」と「文献」)．"""
+    return [v] if isinstance(v, str) else list(v)
+
+
 def load_profile(name):
     path = SKILL_DIR / "journals" / f"{name}.yaml"
     return yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -513,7 +518,7 @@ def main():
         mark_captions(lines, lay)
         # 図表 (引用文献の見出しがあるページでは，文献の字の大きさも本文として扱う)
         refs_here = in_refs[0] or any(
-            is_h1(l) and l["text"].strip().lstrip(lay["heading1_prefix"]).strip() == prof["sections"]["refs"]
+            is_h1(l) and l["text"].strip().lstrip(lay["heading1_prefix"]).strip() in as_list(prof["sections"]["refs"])
             for l in lines)
         def is_body_page(l):
             return is_body(l) or refs_here and near(l["size"], lay["ref_size"], tol)
@@ -575,7 +580,7 @@ def main():
             if is_h1(l):
                 title = l["text"].strip().lstrip(lay["heading1_prefix"]).strip()
                 flush()
-                in_refs[0] = title == prof["sections"]["refs"]
+                in_refs[0] = title in as_list(prof["sections"]["refs"])
                 md.append(f"# {title}")
                 md.append("")
                 if in_refs[0]:

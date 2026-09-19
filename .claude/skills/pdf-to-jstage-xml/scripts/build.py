@@ -522,7 +522,9 @@ def main():
     work = Path(args.work)
     meta = yaml.safe_load((work / "meta.yaml").read_text(encoding="utf-8"))
     prof = yaml.safe_load((SKILL_DIR / "journals" / f"{meta['journal']}.yaml").read_text(encoding="utf-8"))
-    sec_names = prof["sections"]
+    # 節の見出しは号によって言い方が違う (「引用文献」と「文献」)．設定は文字列か，その並びで書ける
+    sec_names = {k: ([v] if isinstance(v, str) else list(v)) for k, v in prof["sections"].items()}
+    titles = {k: v[0] for k, v in sec_names.items()}   # XML に出す見出しは，原稿にあった文言を使う
     blocks = parse_body(work / "body.md")
 
     # 特別な節を切り出す
@@ -530,9 +532,9 @@ def main():
     mode = "body"
     for b in blocks:
         if b[0] == "h" and b[1] == 1:
-            mode = {sec_names["abstract"]: "abstract", sec_names["ack"]: "ack",
-                    sec_names["refs"]: "refs"}.get(b[2], "body")
+            mode = next((k for k in ("abstract", "ack", "refs") if b[2] in sec_names[k]), "body")
             if mode != "body":
+                titles[mode] = b[2]
                 continue
         if mode == "abstract" and b[0] == "p":
             abstract_ja.append(b[1])
@@ -555,7 +557,7 @@ def main():
     names = GraphicNames(art_id)
     body_xml = build_body(main_blocks, refs, floats, work, names)
     front = build_front(meta, prof, abstract_ja, refs, floats)
-    back = build_back(ack, refs, sec_names)
+    back = build_back(ack, refs, titles)
     lang = meta.get("lang", "ja")
     xml = (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
@@ -887,12 +889,12 @@ def build_front(meta, prof, abstract_ja, refs, floats):
     return "\n".join(o)
 
 
-def build_back(ack, refs, sec_names):
+def build_back(ack, refs, titles):
     o = ["<back>"]
     if ack:
-        o.append(f"<ack><title>{esc(sec_names['ack'])}</title>" + "".join(f"<p>{inline(esc(p))}</p>" for p in ack) + "</ack>")
+        o.append(f"<ack><title>{esc(titles['ack'])}</title>" + "".join(f"<p>{inline(esc(p))}</p>" for p in ack) + "</ack>")
     if refs:
-        o.append(f"<ref-list><title>{esc(sec_names['refs'])}</title>")
+        o.append(f"<ref-list><title>{esc(titles['refs'])}</title>")
         o += [r.to_xml() for r in refs]
         o.append("</ref-list>")
     o.append("</back>")

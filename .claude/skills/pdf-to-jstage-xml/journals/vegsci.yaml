@@ -43,9 +43,9 @@ layout:
 
 # 特別な扱いをする見出し
 sections:
-  abstract: 摘要            # → <abstract xml:lang="ja"> (本文からは外す)
+  abstract: [摘要, 要約]    # → <abstract xml:lang="ja"> (本文からは外す)
   ack: 謝辞                 # → <back><ack>
-  refs: 引用文献            # → <back><ref-list>
+  refs: [引用文献, 文献]    # → <back><ref-list> (1990 年代の号は「文献」)
   appendix: 付録            # → <back><app-group>
 
 # 引用文献の書式 (scripts/refs.py の規則を選ぶ)

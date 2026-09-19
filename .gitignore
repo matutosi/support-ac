@@ -1,18 +1,16 @@
-.Rproj.user
-.Rhistory
-.RData
-.Ruserdata
-data/
-support-ac.Rproj
-1名札.py
-2領収書.py
-__pycache__/
-*.png
-!stamp.png
+# 生成物 (PDF・PNG の書き出し先)
+output/
+# 直下に置いた入力の PDF・PNG も追跡しない (安全網)．印影の見本だけは追跡する
 *.pdf
-file.bz2
-shape.dat.txt
+*.png
+!assets/stamp.png
+
+# 手元の控え (実際の大会の値など．公開リポジトリには入れない)
+data/
+
+# Python
+**/__pycache__/
+
 # pdf-to-jstage-xml: 作業ディレクトリと，初回に J-STAGE から取る DTD 一式
 jstage/work/
 .claude/skills/pdf-to-jstage-xml/dtd/
-**/__pycache__/

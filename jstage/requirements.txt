@@ -1,0 +1,6 @@
+# J-STAGE 関係 (jstage/ と スキル pdf-to-jstage-xml) の依存．
+# 直下の requirements.txt は Streamlit Cloud 用なので，こちらは分けてある．
+pymupdf
+lxml
+pyyaml
+beautifulsoup4

@@ -65,6 +65,11 @@ J-STAGE の論文の一覧の取得と，論文 PDF から全文 XML を作る�
 
 ### 現在の状態
 
+- 2026-09-19 18:52 (このセッション，web)
+  **`draw_string.py` の単体実行を直した**．デモが `font_name` を渡すようにし，
+  書体の指定が無いときは `KeyError: 'None'` ではなく理由の分かる `ValueError` で止まるようにした．
+  `os.startfile` は Windows のときだけ呼ぶ (他では出力先のパスを表示)．
+
 - 2026-09-19 09:48 (このセッション，x280-home)
   **`jstage/work` に入れ子と写しを作らないようにした** (`build.py` は `out/` と zip だけ．対応表 `manifest.py`)．
   3 本を組み直して zip の中身が前と一致することを確かめ，古い入れ子を消した (79 → 66 MB)．
@@ -83,7 +88,5 @@ J-STAGE の論文の一覧の取得と，論文 PDF から全文 XML を作る�
 ### 次にやること
 
 - `data/adress.txt` (植生学会の大会の領収書の文面) は，大会の運営を扱う congress_vs へ移すかを決める．
-- `draw_string.py` を単体で実行すると `KeyError: 'None'` で落ちる (デモがフォント名を渡していない)．
-  部品としては名札・領収書から正しく使えている．直すかは未定．
 - `requirements.txt` の固定版 (numpy 2.2.4・pandas 2.2.3 など) は Python 3.14 用のビルド済みパッケージが無い．
   Streamlit Cloud の Python の版と合わせて，上げるかを決める．

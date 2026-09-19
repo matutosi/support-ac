@@ -30,6 +30,9 @@ def draw_string(p, x, y,
         p.setLineWidth(line_width)
         p.line(x, y + offset_y, x + width, y + offset_y)
     p.setFillColor(color)
+    if font_name is None:
+        raise ValueError(
+            "font_name を指定する (pdfmetrics.registerFont で登録した名前)")
     p.setFont(font_name, font_size)
     if align == "left":
         p.drawString(x, y, str)
@@ -53,7 +56,7 @@ if __name__ == '__main__':
     x=10
     y=100
     str="文字列の例"
-    draw_string(p, x, y, str)
+    draw_string(p, x, y, str, font_name=font_name)
 
     x=10
     y=200
@@ -61,15 +64,19 @@ if __name__ == '__main__':
     color="white"
     bg_color="green"
     width=200
-    draw_string(p, x, y, str, color=color, bg_color=bg_color, shape="rect", width=width)
+    draw_string(p, x, y, str, font_name=font_name,
+                color=color, bg_color=bg_color, shape="rect", width=width)
 
     x=200
     y=300
     str="懇"
     color="white"
     bg_color="green"
-    draw_string(p, x, y, str, color=color, bg_color=bg_color, shape="circle")
+    draw_string(p, x, y, str, font_name=font_name,
+                color=color, bg_color=bg_color, shape="circle")
 
     p.save()
 
-    os.startfile(path_file)
+    if hasattr(os, "startfile"):   # Windows のときだけ開く
+        os.startfile(path_file)
+    print(path_file)

@@ -15,7 +15,9 @@ build.py が作った out/manifest.json と <記事識別子>.zip も見る (画
 """
 import posixpath
 import re
+import time
 import sys
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -30,12 +32,28 @@ DTD_MAIN = "JATS-journalpublishing1.dtd"
 NS = {"xlink": "http://www.w3.org/1999/xlink"}
 
 
+def fetch_dtd(url, tries=4):
+    """DTD の一部を取る．404 は None (条件付きで参照されるだけのもの)．
+    それ以外の失敗は間を空けて試し直し，最後まで駄目なら止める
+    (黙って飛ばすと DTD が欠けたまま残り，次回以降も取り直されないため)．"""
+    for i in range(tries):
+        try:
+            return urllib.request.urlopen(url, timeout=60).read()
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                return None
+            last = e
+        except Exception as e:  # 通信の失敗
+            last = e
+        if i < tries - 1:
+            time.sleep(2 ** i)
+    raise SystemExit(f"DTD を取れなかった: {url} ({last})")
+
+
 def ensure_dtd():
-    if (DTD_DIR / DTD_MAIN).exists():
-        return
-    print("DTD を J-STAGE から取得する (初回だけ)")
     pat = re.compile(r'(?:SYSTEM|PUBLIC\s+"[^"]*")\s*"([^"]+\.(?:ent|dtd|mod))"', re.S)
-    todo, seen = [DTD_MAIN], set()
+    todo, seen, got, missing = [DTD_MAIN], set(), 0, []
+    said = False
     while todo:
         f = todo.pop()
         if f in seen:
@@ -43,17 +61,22 @@ def ensure_dtd():
         seen.add(f)
         path = DTD_DIR / f
         if not path.exists():
-            try:
-                data = urllib.request.urlopen(DTD_BASE + f, timeout=60).read()
-            except Exception:
-                continue  # 条件付きで参照されるだけのもの (404) は無視してよい
+            if not said:
+                print("DTD を J-STAGE から取得する (足りない分だけ)")
+                said = True
+            data = fetch_dtd(DTD_BASE + f)
+            if data is None:
+                missing.append(f)   # 404．条件付きで参照されるだけのものは無くてよい
+                continue
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
+            got += 1
         d = posixpath.dirname(f)
         for m in pat.findall(path.read_text(encoding="utf-8", errors="replace")):
             if not m.startswith("http"):
                 todo.append(posixpath.normpath(posixpath.join(d, m)))
-    print(f"  {len(seen)} ファイル")
+    if got:
+        print(f"  {got} ファイルを取得 (一式 {len(seen) - len(missing)} ファイル)")
 
 
 def text_len(el):

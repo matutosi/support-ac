@@ -76,7 +76,8 @@ sections:
   abstract: [摘要, 要約, ABSTRACT, Abstract]          # → <abstract> (本文からは外す)
   ack: [謝辞, ACKNOWLEDGEMENT, ACKNOWLEDGEMENTS, ACKNOWLEDGMENT, ACKNOWLEDGMENTS,
         Acknowledgement, Acknowledgements, Acknowledgment, Acknowledgments]
-  refs: [引用文献, 文献, REFERENCES, References]      # 1990 年代の和文は「文献」
+  refs: [引用文献, 文献, REFERENCES, References, REFFERENCES]   # 1990 年代の和文は「文献」．
+                                                     # REFFERENCES は 16(2):103 の原文の綴りの誤り
   appendix: [付録, APPENDIX, Appendix]
 
 # 紙をスキャンした旧号 (extract_scan.py) 用の設定

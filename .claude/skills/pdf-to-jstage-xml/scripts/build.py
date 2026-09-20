@@ -164,7 +164,12 @@ JOURNAL_TAIL = re.compile(
     r"(?:\s*[-–−₋~〜～]\s*(?P<lp>[A-Za-z]?\d+))?"
     # 「1-10, pls. 1-4.」のように図版の付記が続くことがある (植生学会誌 13(2) の B3)
     r"(?:\s*[,，]\s*(?:pls?|figs?)\s*\.?\s*[\dA-Za-z,\s\-–−]*)?"
-    r"(?:\s*\+\s*[^.．]*)?\s*[.．]?\s*$")     # 「371-486+30 plates.」のような後ろ付きも雑誌として扱う
+    r"(?:\s*\+\s*[^.．]*)?"
+    # 「(in Japanese with English summary).」のような付記が続くことがある．
+    # これを受けないと雑誌と分からず，書籍として誌名と題名が入れ替わっていた (16(2):149)．
+    # 原文の閉じ括弧が落ちていることもある (同 Maesako 1985) ので，閉じは無くてもよい
+    r"(?:\s*[（(][^)）]*[)）]?)?"
+    r"\s*[.．]?\s*$")     # 「371-486+30 plates.」のような後ろ付きも雑誌として扱う
 CHAPTER_JA = re.compile(
     r"^(?P<title>.+?[.．])\s*(?P<eds>[^「」．.]+?)編「(?P<src>[^」]+)」\s*[,，]\s*(?P<fp>\d+)(?:\s*[-–]\s*(?P<lp>\d+))?"
     r"\s*[.．]\s*(?P<pub>[^,，．.]+?)\s*[,，]\s*(?P<loc>[^.．]+?)\s*[.．]\s*$")
@@ -505,21 +510,36 @@ def link_floats(text, floats):
         for mm in re.finditer(r"(\s*(?:[，,、]|and|&|＆)\s*)(\d+)", m.group(4)):
             out += mm.group(1) + one(kind, mm.group(2), mm.group(2))
         return out
-    return re.sub(r"(図|表|Figs\.|Fig\.|Figures|Figure|Figs|Fig|Tables|Table)(\s*)(\d+)"
+    return re.sub(r"(図|表|Figs\.|Fig\.|Figures|Figure|Figs|Fig"
+                  r"|Tables|Table|Tabs\.|Tab\.)(\s*)(\d+)"
                   r"((?:\s*(?:[，,、]|and|&|＆)\s*\d+(?![\d.]))*)", rep, text)
+
+
+SEC_NUM = re.compile(r"^[\s\u3000]*(?:[0-9０-９]+|[IVXivx]+)[\s\u3000]*[．.、，,:：]?[\s\u3000]*")
+
+
+def sec_head(t):
+    """節の見出しを，設定の文言と引き合わせるための形にする．
+
+    原文が「5．謝辞」「7．引用文献」のように番号を付けていても振り分けられるように，
+    行頭の番号を落とす．**XML に出す見出しは原文のまま** (番号も残る)．
+    """
+    return SEC_NUM.sub("", t).strip().strip("．.：:　 ")
 
 
 def link_formulas(text, floats):
     """「式(1)」「式1」「(1)式」を別行立ての式へのリンクにする．
 
+    欧文の論文は「Eq. (1)」「Eqs. 1 and 2」と書くので，それも受ける (16(2):103)．
     番号だけの「(1)」は，引用の番号や注の番号と紛れるのでリンクしない．"""
     def rep(m):
-        num = m.group(2) or m.group(3)
+        num = m.group(2) or m.group(3) or m.group(4)
         key = "E" + num
         if key not in floats:
             return m.group(0)
         return f"\x05{key}\x02{m.group(0)}\x03"
-    return re.sub(r"(式\s*\(?(\d+)\)?|\((\d+)\)\s*式)", rep, text)
+    return re.sub(r"(式\s*[（(]?(\d+)[)）]?|[（(](\d+)[)）]\s*式"
+                  r"|Eqs?\s*\.?\s*[（(]?(\d+)[)）]?)", rep, text)
 
 
 def para_xml(text, refs, floats, where):
@@ -603,7 +623,9 @@ def main():
     mode = "body"
     for b in blocks:
         if b[0] == "h" and b[1] == 1:
-            mode = next((k for k in ("abstract", "ack", "refs") if b[2] in sec_names[k]), "body")
+            head = sec_head(b[2])
+            mode = next((k for k in ("abstract", "ack", "refs")
+                         if head in [sec_head(n) for n in sec_names[k]]), "body")
             if mode != "body":
                 titles[mode] = b[2]
                 continue

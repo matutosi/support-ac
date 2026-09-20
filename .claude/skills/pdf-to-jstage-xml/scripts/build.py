@@ -922,7 +922,9 @@ def build_front(meta, prof, abstract_ja, refs, floats):
     if pd.get("epub"):
         o.append(date_xml("pub-date", 'pub-type="epub"', pd["epub"]))
     o.append(f"<volume>{esc(str(meta['volume']))}</volume><issue>{esc(str(meta['issue']))}</issue>")
-    o.append(f"<fpage>{esc(str(meta['fpage']))}</fpage><lpage>{esc(str(meta['lpage']))}</lpage>")
+    # 1ページだけの記事 (訂正など) は lpage が無いので，fpage と同じにする
+    lp = meta.get("lpage") or meta["fpage"]
+    o.append(f"<fpage>{esc(str(meta['fpage']))}</fpage><lpage>{esc(str(lp))}</lpage>")
     h = meta.get("history") or {}
     if any(h.values()):
         o.append("<history>")

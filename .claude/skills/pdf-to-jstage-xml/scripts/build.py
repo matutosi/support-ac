@@ -916,6 +916,19 @@ def build_front(meta, prof, abstract_ja, refs, floats):
     if has_contrib:
         o.append("</contrib-group>")
 
+    # 著者の脚注 (「現所属」「Present address」など)．meta.yaml の author_notes に書く
+    notes = meta.get("author_notes") or []
+    if notes:
+        o.append("<author-notes>")
+        for n in notes:
+            ft = f' fn-type="{attr(n["type"])}"' if n.get("type") else ""
+            o.append(f"<fn{ft}>")
+            for lg in ("ja", "en"):
+                if n.get(lg):
+                    o.append(f'<p xml:lang="{lg}">{inline(esc(n[lg]))}</p>')
+            o.append("</fn>")
+        o.append("</author-notes>")
+
     pd = meta.get("pub_date") or {}
     if pd.get("ppub"):
         o.append(date_xml("pub-date", 'pub-type="ppub"', pd["ppub"]))

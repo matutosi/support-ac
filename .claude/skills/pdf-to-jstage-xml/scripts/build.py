@@ -119,7 +119,9 @@ def tag_ja_name(name):
             f'</string-name>{esc(suffix)}')
 
 
-EN_NAME = re.compile(r"([^,&]+?),\s*((?:[A-Z][a-zà-ÿ]?\.\s?-?\s?)+)")
+# イニシャルの点が落ちている原文もある (「Ishizuka, M & Sugawara, S. 1986.」．植生学会誌 14(2))．
+# 点の無いイニシャルは，後ろが区切り (& / and / , / 行末) のときだけ認める
+EN_NAME = re.compile(r"([^,&]+?),\s*((?:[A-Z][a-zà-ÿ]?\.\s?-?\s?)+|[A-Z][a-zà-ÿ]?(?=\s*(?:&|and\b|,|$)))")
 
 
 def tag_en_authors(auth):

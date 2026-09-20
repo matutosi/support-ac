@@ -141,7 +141,7 @@ def main():
     am = r.find("front/article-meta")
     o += ["## 書誌", ""]
     o.append(f"- 種別: {r.get('article-type')} / " + " / ".join(
-        s.text or "" for s in am.iter("subject")))
+        "".join(s.itertext()) for s in am.iter("subject")))
     o.append("- DOI: " + (am.findtext("article-id[@pub-id-type='doi']") or ""))
     tg = am.find("title-group")
     o.append(f"- 題名 ({lang(tg.find('article-title'))}): {inline(tg.find('article-title'), refs)}")
@@ -164,9 +164,10 @@ def main():
     for d in am.iter("date"):
         o.append(f"- {d.get('date-type')}: {d.findtext('year')}-{d.findtext('month')}-{d.findtext('day')}")
     for kg in am.iter("kwd-group"):
-        o.append(f"- キーワード ({lang(kg)}): " + ", ".join(k.text or "" for k in kg.iter("kwd")))
+        # キーワードに <italic> が入ると .text が空になるので，中の字をすべてつなぐ
+        o.append(f"- キーワード ({lang(kg)}): " + ", ".join("".join(k.itertext()) for k in kg.iter("kwd")))
     for cs in am.iter("copyright-statement"):
-        o.append(f"- 著作権 ({lang(cs)}): {cs.text}")
+        o.append(f"- 著作権 ({lang(cs)}): {''.join(cs.itertext())}")
     for tag in ("abstract", "trans-abstract"):
         for ab in am.iter(tag):
             o += ["", f"### 要旨 ({lang(ab)})", ""]

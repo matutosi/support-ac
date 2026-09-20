@@ -6,6 +6,7 @@
     --page   PDF のページ番号 (1 から数える．`pages/p003.png` の 3)
     --rect   切り出す枠 x0,y0,x1,y1 (pt．PDF の座標．`floats.txt`・`report.txt` の値と同じ)
     --dpi    既定 300 (式は小さいので図 (200) より細かくする)
+    --rotate 切り出した画像を回す角度 (0・90・180・270)．紙面が寝ているページで使う
     --out    作業ディレクトリからの相対パス (無ければ親のフォルダを作る)
 
 式番号 (1) は画像に入れず，body.md の枠に書いて XML の <label> に持たせる
@@ -27,6 +28,8 @@ def main():
     ap.add_argument("--rect", required=True, help="x0,y0,x1,y1 (pt)")
     ap.add_argument("--dpi", type=int, default=300)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--rotate", type=int, default=0, choices=[0, 90, 180, 270],
+                    help="切り出した画像を回す角度 (紙面が90度寝ているページで使う)")
     args = ap.parse_args()
 
     work = Path(args.work)
@@ -40,7 +43,12 @@ def main():
         clip = rect & page.rect
         if clip.is_empty:
             raise SystemExit(f"枠がページの外: {tuple(rect)} (ページは {tuple(page.rect)})")
-        page.get_pixmap(dpi=args.dpi, clip=clip).save(out)
+        if args.rotate:
+            z = args.dpi / 72
+            m = pymupdf.Matrix(z, z).prerotate(args.rotate)
+            page.get_pixmap(matrix=m, clip=clip).save(out)
+        else:
+            page.get_pixmap(dpi=args.dpi, clip=clip).save(out)
     print(f"p{args.page} {tuple(round(v) for v in clip)} → {out.relative_to(work)}")
 
 

@@ -28,10 +28,14 @@ import argparse
 import collections
 import re
 import statistics
+import sys
 from pathlib import Path
 
 import pymupdf
 import yaml
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import layout                                         # noqa: E402
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
 REPORT = []
@@ -276,6 +280,11 @@ def main():
     args = ap.parse_args()
 
     prof = load_profile(args.journal)
+    # 体裁の見分け: DTP で組んだ PDF なら新しい号用のスクリプトへ渡す
+    if layout.detect(args.pdf) == "dtp":
+        print("DTP で組んだ PDF なので extract.py で処理する", file=sys.stderr)
+        import extract
+        return extract.hand_over(extract, args)
     cap_pat = CAP   # スキャンは約物が崩れるので，設定の caption_pattern は使わない
     sec = prof["sections"]
     names = lambda k: [sec[k]] if isinstance(sec[k], str) else list(sec[k])
@@ -285,6 +294,18 @@ def main():
         if sub != "pages":
             for old in (out / sub).glob("*.png"):
                 old.unlink()
+
+
+    # 巻号が分かっていれば，設定の eras が言う体裁と食い違わないかを確かめる
+    mp = out / "meta.yaml"
+    if mp.exists():
+        meta_now = yaml.safe_load(mp.read_text(encoding="utf-8")) or {}
+        warns, _kind, era = layout.check(prof, args.pdf, meta_now.get("volume"), meta_now.get("issue"))
+        REPORT.extend(warns)
+        if era and era.get("refs_head"):
+            REPORT.append(f"この巻号の引用文献の見出しは「{era['refs_head']}」のはず (設定の eras より)")
+        if era and era.get("category"):
+            REPORT.append(f"この巻号の原稿種別の印字は「{era['category']}」のはず (設定の eras より)")
 
     doc = pymupdf.open(args.pdf)
     md, ocr, page1, floats_txt = [], [], [], []

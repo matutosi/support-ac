@@ -25,6 +25,34 @@ article_types:
   特集:     {type: other,                en: Special Feature}
   寄稿:     {type: other,                en: Contribution}
 
+# 体裁が変わった巻号 (2026-09-20 に jstage/pdf_fingerprint.py の二分探索で特定)．
+# `from: [巻, 号]` から，次の項目の手前まで．scripts/layout.py が使う．
+# 決めるのは PDF そのもの (layout.detect)．この表は食い違いに気づくための控え．
+eras:
+  - from: [13, 1]
+    source: scan            # 紙をスキャンして OCR をかけた PDF → extract_scan.py
+    refs_head: 文献
+    paper: A4 (スキャナの紙．印刷物の判型とは限らない)
+  - from: [13, 2]
+    source: scan
+    refs_head: 引用文献
+  - from: [31, 2]
+    source: dtp             # DTP で組んだ PDF → extract.py
+    refs_head: 引用文献
+    body_size: 9.9
+    paper: 215x280mm
+    category: 原著論文
+  - from: [39, 1]
+    source: dtp
+    body_size: 9.2          # 版面も縦に 32mm 伸びた (239 → 271mm)
+    paper: A4
+    category: 原著論文
+  - from: [40, 2]
+    source: dtp
+    body_size: 9.2
+    paper: A4
+    category: 原著          # 種別の印字が「原著論文」から「原著」へ
+
 # 組版の判定に使う値 (単位は pt．InDesign で組まれた 2014 年頃の号で確かめた)
 layout:
   header_y_max: 62          # これより上は柱とノンブル

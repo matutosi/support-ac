@@ -77,20 +77,22 @@ python $S/fetch_jstage.py <記事の URL> --out W
 
 ### 1. PDF から下書きを作る
 
-**PDF が2種類ある**．どちらかを1回だけ実行する．
+**PDF が2種類ある**が，**どちらを呼んでも自動で切り替わる**ので，いつも次を実行すればよい．
 
-| 号 | PDF | 使うもの |
+```
+python $S/extract.py W/<記事識別子>.pdf --journal vegsci --out W
+```
+
+| 号 | PDF | 実際に動くもの |
 |---|---|---|
-| 2000 年代以降 | DTP で組んだもの (書体が複数・図は画像や罫線で入っている) | `extract.py` |
-| 1990 年代まで | **紙をスキャンして OCR をかけたもの** (書体が1種類・ページ全体が1枚の画像) | `extract_scan.py` |
+| 31(2) 以降 | DTP で組んだもの (書体が複数・図は画像や罫線で入っている) | `extract.py` |
+| 13 巻〜31(1) | **紙をスキャンして OCR をかけたもの** (書体が1種類・ページ全体が1枚の画像) | `extract_scan.py` |
 
-見分け方: `python -c "import pymupdf;d=pymupdf.open('W/x.pdf');print({s['font'] for b in d[0].get_text('dict')['blocks'] if b['type']==0 for l in b['lines'] for s in l['spans']})"`
-で書体が1つ (例: `MS-Gothic`) だけならスキャン．`extract.py` を掛けると本文が数行しか取れないのでも分かる．
-
-```
-python $S/extract.py W/<記事識別子>.pdf --journal vegsci --out W          # 新しい号
-python $S/extract_scan.py W/<記事識別子>.pdf --journal vegsci --out W     # 旧号 (スキャン)
-```
+- 見分けるのは `scripts/layout.py` の `detect()` で，**PDF そのもの** (書体の数とページ全体を覆う画像) を見る．
+  切り替わったときは「紙をスキャンした PDF なので extract_scan.py で処理する」と出る．
+- `meta.yaml` があれば，**設定 `journals/<資料コード>.yaml` の `eras`** (体裁が変わった巻号の表) と
+  引き合わせ，食い違いと，その巻号での引用文献の見出し・原稿種別の文言を `report.txt` に書く．
+  新しい体裁の号が出たら `eras` に1行足す (表の中身は「経緯と根拠」の節を見る)．
 
 - `body.md` (本文・謝辞・摘要・引用文献)，`pages/` (ページ画像)，`figs/`・`tables/` (図表の画像)，
   `floats.txt` (表の中の文字)，`report.txt` (自動で判断したこと) ができる．

@@ -23,7 +23,23 @@ from pathlib import Path
 import pymupdf
 import yaml
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import extract_scan                                   # noqa: E402
+import layout                                         # noqa: E402
+
 SKILL_DIR = Path(__file__).resolve().parent.parent
+
+
+def hand_over(module, args, band=None):
+    """同じ引数で，もう一方の抽出スクリプトを呼ぶ．"""
+    argv = [sys.argv[0], args.pdf, "--journal", args.journal, "--out", args.out,
+            "--dpi-page", str(args.dpi_page), "--dpi-fig", str(args.dpi_fig)]
+    if getattr(args, "force", False):
+        argv.append("--force")
+    if band is not None:
+        argv += ["--band", str(band)]
+    sys.argv = argv
+    return module.main()
 
 
 def as_list(v):
@@ -413,6 +429,10 @@ def main():
     args = ap.parse_args()
 
     prof = load_profile(args.journal)
+    # 体裁の見分け: 紙のスキャンなら旧号用のスクリプトへ渡す (どちらを呼んでもよいようにする)
+    if layout.detect(args.pdf) == "scan":
+        print("紙をスキャンした PDF なので extract_scan.py で処理する", file=sys.stderr)
+        return hand_over(extract_scan, args)
     lay = prof["layout"]
     out = Path(args.out)
     for sub in ("pages", "figs", "tables"):
@@ -421,6 +441,18 @@ def main():
             # 前回の画像を消す (図表の数や続きのページが変わったとき，古い画像を build.py が拾わないように)
             for old in (out / sub).glob("*.png"):
                 old.unlink()
+
+
+    # 巻号が分かっていれば，設定の eras が言う体裁と食い違わないかを確かめる
+    mp = out / "meta.yaml"
+    if mp.exists():
+        meta_now = yaml.safe_load(mp.read_text(encoding="utf-8")) or {}
+        warns, _kind, era = layout.check(prof, args.pdf, meta_now.get("volume"), meta_now.get("issue"))
+        REPORT.extend(warns)
+        if era and era.get("refs_head"):
+            REPORT.append(f"この巻号の引用文献の見出しは「{era['refs_head']}」のはず (設定の eras より)")
+        if era and era.get("category"):
+            REPORT.append(f"この巻号の原稿種別の印字は「{era['category']}」のはず (設定の eras より)")
 
     doc = pymupdf.open(args.pdf)
     lay = auto_layout(doc, lay)

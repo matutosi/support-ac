@@ -45,23 +45,30 @@ def attr(s):
 # ================================================================ 文中の修飾
 
 def inline(s):
-    """escape ずみの文字列に *斜体*・**太字**・^上付き^・~下付き~・URL の印を付ける．"""
+    """escape ずみの文字列に *斜体*・**太字**・^上付き^・~下付き~・URL の印を付ける．
+
+    印にしたくない「*」は `\\*` と書く (表の脚注の「*1: …」など．16(1):57)．
+    """
+    s = s.replace("\\*", "\x00")          # 印にしない「*」をいったん外す
     s = re.sub(r"\*\*(.+?)\*\*", r"<bold>\1</bold>", s)
-    s = re.sub(r"(?<![\w*])\*(?!\s)(.+?)(?<!\s)\*(?![\w*])", r"<italic>\1</italic>", s)
+    # 前後の字で区切るのは，語の中の「*」(N*・log*x*) を印と取り違えないため．
+    # \w は仮名・漢字にも当たるので，和文に接した学名 (「山麓部に*Abies*の…」) が
+    # 斜体にならなかった (16(2):115)．ASCII の語の字だけを見る
+    s = re.sub(r"(?<![A-Za-z0-9_*])\*(?!\s)(.+?)(?<!\s)\*(?![A-Za-z0-9_*])", r"<italic>\1</italic>", s)
     s = re.sub(r"\^([^^\s][^^]*?)\^", r"<sup>\1</sup>", s)
     s = re.sub(r"(?<![~〜])~([^~\s][^~]*?)~(?!~)", r"<sub>\1</sub>", s)
     s = re.sub(r"(https?://[A-Za-z0-9._~:/?#\[\]@!$&'()*+;=%-]+?)(?=[，。．、）)\s]|$|\.(?:\s|$))",
                lambda m: f'<ext-link ext-link-type="uri" xlink:href="{m.group(1)}">{m.group(1)}</ext-link>', s)
-    return s
+    return s.replace("\x00", "*")
 
 
 # ================================================================ 引用文献
 
-ORG = re.compile(r"(財団|協会|学会|省|庁|局|課|県|市|町|村役場|研究所|委員会|センター|会議|組合|機構|"
+ORG = re.compile(r"(財団|協会|学会|省|庁|局|課|県|市|町|村役場|研究所|委員会|センター|会議|組合|機構|グループ|調査団|"
                  r"Ministry|Society|Agency|Institute|Committee|Council|Association)")
 
 
-ORG_END = re.compile(r"(財団|協会|学会|省|庁|局|課|部|室|県|市|町|村|研究所|委員会|センター|会議|組合|機構|"
+ORG_END = re.compile(r"(財団|協会|学会|省|庁|局|課|部|室|県|市|町|村|研究所|委員会|センター|会議|組合|機構|グループ|調査団|"
                      r"編|ほか)$")
 
 
@@ -107,7 +114,9 @@ def tag_ja_name(name):
         core = m.group(1)
         name = core.rstrip()
         suffix = core[len(name):] + m.group(2)   # 「奥田重俊 編」の空白を残す
-    if ORG.search(name):
+    # 団体の字で終わるか，人名としては長すぎるときだけ団体とみなす
+    # (「岡本省吾」の「省」だけで団体にしていた．16(1):39 の B35)
+    if ORG_END.search(name.strip()) or (ORG.search(name) and len(name.strip()) >= 6):
         return f'<collab xml:lang="ja">{esc(name)}</collab>{esc(suffix)}'
     parts = re.split(r"[\s　]+", name.strip(), maxsplit=1)
     if len(parts) == 2:
@@ -121,9 +130,10 @@ def tag_ja_name(name):
 
 # イニシャルの点が落ちている原文もある (「Ishizuka, M & Sugawara, S. 1986.」．植生学会誌 14(2))．
 # 点の無いイニシャルは，後ろが区切り (& / and / , / 行末) のときだけ認める
-# 筆頭著者のカンマが落ちている原文もある (「Brown W. H. & Matthews, D. M. 1914.」．
-# 植生学会誌 15(1): 19)．カンマは無くてもよいことにする
-EN_NAME = re.compile(r"([^,&]+?),?\s*((?:[A-Z][a-zà-ÿ]?\.\s?-?\s?)+|(?<![A-Z])[A-Z](?=\s*(?:&|and\b|,|$)))")
+# イニシャルの前に空白が入る原文もある (「Krummel, J .P.」．16(2):103 の B16)
+# 筆頭著者のカンマが落ちている原文もある (「Brown W. H. & Matthews, D. M. 1914.」．15(1):19)．
+# 点の無いイニシャルは大文字1字に限る (「Chapin III, F.S.」が割れるのを防ぐ)
+EN_NAME = re.compile(r"([^,&]+?),?\s*((?:[A-Z][a-zà-ÿ]?\s?\.\s?-?\s?)+|(?<![A-Z])[A-Z](?=\s*(?:&|and\b|,|$)))")
 
 
 def tag_en_authors(auth):
@@ -158,7 +168,9 @@ YEAR = re.compile(r"^(?P<auth>.+?)\s*[（(]?(?P<year>(?:1[89]|20)\d{2})(?P<suf>[
                   r"(?:\s*[-–−~〜]\s*\d{2,4})?[)）]?\s*(?:[.．]\s*|\s+)(?P<rest>.*)$")
 JOURNAL_TAIL = re.compile(
     # 誌名は *斜体* で囲まれていれば中に「.」があってもよい (J. Sci. Hiroshima Univ. など)
-    r"\s*(?P<src>\*[^*]+\*|[^.．\s][^.．]*?)(?:\s*[,，]\s*|\s+)"
+    # 誌名と巻の間は，読点のほか「Journal of Ecology. 19 : 95-99.」のように
+    # 句点のこともある (16(2):103 の B1．これを受けないと雑誌と分からず書籍になる)
+    r"\s*(?P<src>\*[^*]+\*|[^.．\s][^.．]*?)(?:\s*[.．,，]\s*|\s+)"
     # 巻は「52-53」のような範囲や，「Suppl. 1」のような別冊の言い方もある．
     # 巻を立てず号だけの雑誌もある (「フロラ栃木，(3)：1-10」．植生学会誌 13(2) の B3)
     r"(?:(?P<vol>(?:Suppl\.?\s*|Spec\.?\s*)?[A-Za-z]?\d+(?:\s*[-–−]\s*\d+)?[A-Za-z]?)"
@@ -168,7 +180,15 @@ JOURNAL_TAIL = re.compile(
     r"(?:\s*[-–−₋~〜～]\s*(?P<lp>[A-Za-z]?\d+))?"
     # 「1-10, pls. 1-4.」のように図版の付記が続くことがある (植生学会誌 13(2) の B3)
     r"(?:\s*[,，]\s*(?:pls?|figs?)\s*\.?\s*[\dA-Za-z,\s\-–−]*)?"
-    r"(?:\s*\+\s*[^.．]*)?\s*[.．]?\s*$")     # 「371-486+30 plates.」のような後ろ付きも雑誌として扱う
+    r"(?:\s*[+＋]\s*[^.．]*)?"
+    # 古い和文の雑誌は，ページのあとに発行地が続くことがある
+    # (「寒地農学，2（2）：143−173，札幌．」．16(1):13 の B12)
+    r"(?:\s*[,，]\s*[^.．,，:：\d][^.．,，:：]{0,9})?"
+    # 「(in Japanese with English summary).」のような付記が続くことがある．
+    # これを受けないと雑誌と分からず，書籍として誌名と題名が入れ替わっていた (16(2):149)．
+    # 原文の閉じ括弧が落ちていることもある (同 Maesako 1985) ので，閉じは無くてもよい
+    r"(?:\s*[（(][^)）]*[)）]?)?"
+    r"\s*[.．]?\s*$")     # 「371-486+30 plates.」のような後ろ付きも雑誌として扱う
 CHAPTER_JA = re.compile(
     r"^(?P<title>.+?[.．])\s*(?P<eds>[^「」．.]+?)編「(?P<src>[^」]+)」\s*[,，]\s*(?P<fp>\d+)(?:\s*[-–]\s*(?P<lp>\d+))?"
     r"\s*[.．]\s*(?P<pub>[^,，．.]+?)\s*[,，]\s*(?P<loc>[^.．]+?)\s*[.．]\s*$")
@@ -410,32 +430,40 @@ def author_matches(window, ref, raw=None):
 CITE_YEAR = re.compile(r"(?<![\d./:])((?:1[89]|20)\d{2})([a-z]?)(?![\d])")
 
 
-MANUAL = re.compile(r"\{\{([^|{}]+?)\s+((?:1[89]|20)\d{2}[a-z]?)\|([^{}]+)\}\}")
+MANUAL = re.compile(r"\{\{(?:(?P<rid>B\d+)|(?P<key>[^|{}]+?)\s+(?P<year>(?:1[89]|20)\d{2}[a-z]?))"
+                    r"\|(?P<shown>[^{}]+)\}\}")
 
 
 def link_citations(text, refs, where):
-    """AI が手で指定したリンク {{著者名の先頭 年|表示}} を先に処理し，残りを自動でリンクする．
+    """AI が手で指定したリンク {{著者名の先頭 年|表示}}・{{B12|表示}} を先に処理し，残りを自動でリンクする．
 
     AI が手で指定するのは，原文の表記揺れで自動では当たらないとき
     (例: 本文「北海道環境科学センター（2005）」と文献「北海道環境科学研究センター 2005」)．
+    著者名と年では引けないとき (同じ著者の同じ年の文献が2件あり，本文はどちらも「村上 1985」と
+    書いている場合など) は，文献の番号で {{B20|村上 1985}} と書く (16(1):39・16(1):57)．
     表示の文字は原文のまま残す (PDF と HTML の内容は同一でなければならないため)．
     """
     out, pos = [], 0
+    by_id = {r.id: r for r in refs}
     for m in MANUAL.finditer(text):
         out.append(auto_citations(text[pos:m.start()], refs, where))
-        key = re.sub(r"[\s　]", "", m.group(1))
-        # 第一著者の名前か，著者の部分そのもの (「橘ヒサ子・樫村利道」) の先頭で照合する．
-        # 同じ第一著者・同じ年の文献が2件あるときは，2人目まで書いて選び分ける
-        def match(r):
-            # 著者を人ごとに分けられなかった文献 (原文にカンマが無いなど) は auth だけで見る
-            heads = [r.names[0] if r.names else "", getattr(r, "auth", "")]
-            return any(re.sub(r"[\s　]", "", h).startswith(key) for h in heads if h)
-        hit = [r for r in refs if r.year == m.group(2) and match(r)]
+        shown = m.group("shown")
+        if m.group("rid"):
+            hit = [by_id[m.group("rid")]] if m.group("rid") in by_id else []
+        else:
+            key = re.sub(r"[\s　]", "", m.group("key"))
+            # 第一著者の名前か，著者の部分そのもの (「橘ヒサ子・樫村利道」) の先頭で照合する．
+            # 同じ第一著者・同じ年の文献が2件あるときは，2人目まで書いて選び分ける
+            def match(r):
+                # 著者を人ごとに分けられなかった文献 (原文にカンマが無いなど) は auth だけで見る
+                heads = [r.names[0] if r.names else "", getattr(r, "auth", "")]
+                return any(re.sub(r"[\s　]", "", h).startswith(key) for h in heads if h)
+            hit = [r for r in refs if r.year == m.group("year") and match(r)]
         if len(hit) == 1:
-            out.append(f"\x01{hit[0].id}\x02{m.group(3)}\x03")
+            out.append(f"\x01{hit[0].id}\x02{shown}\x03")
         else:
             REPORT.append(f"AI が手で指定したリンクの文献が{'見つからない' if not hit else '複数ある'} ({where}): {m.group(0)}")
-            out.append(m.group(3))
+            out.append(shown)
         pos = m.end()
     out.append(auto_citations(text[pos:], refs, where))
     return "".join(out)
@@ -500,6 +528,7 @@ def link_floats(text, floats):
     """「図1」「表1」を図表へのリンクにする．「図2，3，4」「図3, 4」の2つ目以降の番号もリンクする．
 
     1990 年代の号のように，和文の中で「Fig. 1」「Table 1」と英語で呼ぶ論文もある．
+    複数形 (「Figs. 3 and 4」「Tables 1, 2」) も，「and」でつないだ2つ目以降もリンクする．
     """
     def one(kind, num, shown):
         key = ("F" if kind == "図" or kind.startswith("Fig") else "T") + num   # Fig./Figure/図 → F
@@ -511,23 +540,39 @@ def link_floats(text, floats):
     def rep(m):
         kind = m.group(1)
         out = one(kind, m.group(3), m.group(1) + m.group(2) + m.group(3))
-        for mm in re.finditer(r"(\s*[，,、]\s*)(\d+)", m.group(4)):
+        for mm in re.finditer(r"(\s*(?:[，,、]|and|&|＆)\s*)(\d+)", m.group(4)):
             out += mm.group(1) + one(kind, mm.group(2), mm.group(2))
         return out
-    return re.sub(r"(図|表|Fig\.|Figure|Fig|Table)(\s*)(\d+)((?:\s*[，,、]\s*\d+(?![\d.]))*)", rep, text)
+    return re.sub(r"(図|表|Figs\.|Fig\.|Figures|Figure|Figs|Fig"
+                  r"|Tables|Table|Tabs\.|Tab\.)(\s*)(\d+)"
+                  r"((?:\s*(?:[，,、]|and|&|＆)\s*\d+(?![\d.]))*)", rep, text)
+
+
+SEC_NUM = re.compile(r"^[\s\u3000]*(?:[0-9０-９]+|[IVXivx]+)[\s\u3000]*[．.、，,:：]?[\s\u3000]*")
+
+
+def sec_head(t):
+    """節の見出しを，設定の文言と引き合わせるための形にする．
+
+    原文が「5．謝辞」「7．引用文献」のように番号を付けていても振り分けられるように，
+    行頭の番号を落とす．**XML に出す見出しは原文のまま** (番号も残る)．
+    """
+    return SEC_NUM.sub("", t).strip().strip("．.：:　 ")
 
 
 def link_formulas(text, floats):
     """「式(1)」「式1」「(1)式」を別行立ての式へのリンクにする．
 
+    欧文の論文は「Eq. (1)」「Eqs. 1 and 2」と書くので，それも受ける (16(2):103)．
     番号だけの「(1)」は，引用の番号や注の番号と紛れるのでリンクしない．"""
     def rep(m):
-        num = m.group(2) or m.group(3)
+        num = m.group(2) or m.group(3) or m.group(4)
         key = "E" + num
         if key not in floats:
             return m.group(0)
         return f"\x05{key}\x02{m.group(0)}\x03"
-    return re.sub(r"(式\s*\(?(\d+)\)?|\((\d+)\)\s*式)", rep, text)
+    return re.sub(r"(式\s*[（(]?(\d+)[)）]?|[（(](\d+)[)）]\s*式"
+                  r"|Eqs?\s*\.?\s*[（(]?(\d+)[)）]?)", rep, text)
 
 
 def para_xml(text, refs, floats, where):
@@ -626,7 +671,9 @@ def main():
     mode = "body"
     for b in blocks:
         if b[0] == "h" and b[1] == 1:
-            mode = next((k for k in ("abstract", "ack", "refs") if b[2] in sec_names[k]), "body")
+            head = sec_head(b[2])
+            mode = next((k for k in ("abstract", "ack", "refs")
+                         if head in [sec_head(n) for n in sec_names[k]]), "body")
             if mode != "body":
                 titles[mode] = b[2]
                 continue
@@ -991,15 +1038,23 @@ def build_front(meta, prof, abstract_ja, refs, floats):
         o.append("</permissions>")
 
     ab = meta.get("abstract") or {}
-    # body.md の「# 摘要」は PDF から書き写したもの．ウェブ版より正確なのでこちらを優先する
-    # (英文の論文では和文の摘要が trans-abstract に入る)
-    paras = abstract_ja if lang == "ja" and abstract_ja else ([ab[lang]] if ab.get(lang) else [])
+    # meta.yaml の要旨は，改行で段落に分ける (紙面が段落を分けている要旨があるため．16(1):1)．
+    # 和文は body.md の「# 摘要」があればそちらを使う (段落がそのまま残っているので)
+    def ab_paras(lg):
+        return [x.strip() for x in re.split(r"\n\s*", ab.get(lg) or "") if x.strip()]
+
+    def paras_of(lg):
+        # 和文の摘要は body.md にあればそちらを使う．英文の論文でも同じ
+        # (それまでは英文の論文だと J-STAGE 登録版の1段落が使われていた．16(1):1)
+        return abstract_ja if lg == "ja" and abstract_ja else ab_paras(lg)
+
+    paras = paras_of(lang)
     if paras:
         o.append(f'<abstract xml:lang="{lang}">' + "".join(f"<p>{inline(esc(p))}</p>" for p in paras) + "</abstract>")
-    if ab.get(other):
-        trans = abstract_ja if other == "ja" and abstract_ja else [ab[other]]
+    op = paras_of(other)
+    if op:
         o.append(f'<trans-abstract xml:lang="{other}">'
-                 + "".join(f"<p>{inline(esc(t))}</p>" for t in trans) + "</trans-abstract>")
+                 + "".join(f"<p>{inline(esc(x))}</p>" for x in op) + "</trans-abstract>")
     for lg in ("ja", "en"):
         kws = (meta.get("keywords") or {}).get(lg) or []
         if kws:

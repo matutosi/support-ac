@@ -157,6 +157,11 @@ def main():
         o.append(f"- 著者: {names} (所属 {xs}){extra}")
     for k, v in affs.items():
         o.append(f"- 所属 {k}: {v}")
+    # 著者の脚注 (現所属など)．出さないと検証役が確かめられない (16(2):141 の独立検証)
+    for fn in am.iter("fn"):
+        t = (" " + fn.get("fn-type")) if fn.get("fn-type") else ""
+        for pp in fn.iter("p"):
+            o.append(f"- 著者の脚注{t} ({lang(pp)}): " + "".join(pp.itertext()).strip())
     for pd in am.iter("pub-date"):
         ymd = "-".join(t for t in (pd.findtext("year"), pd.findtext("month"), pd.findtext("day")) if t)
         o.append(f"- 発行日 ({pd.get('pub-type')}): {ymd}")

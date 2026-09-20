@@ -97,10 +97,20 @@ def raw_rows(page, band):
             if t.strip():
                 frs.append((pymupdf.Rect(l["bbox"]), t))
     mid = page.rect.width / 2
+    colw = page.rect.width / 2 - 60
     # 段の境をまたぐ断片がある高さは「全幅」とみなす (1ページ目の題名・要旨，2段にまたがる図表)．
-    # 本文のページには1つも無い (13(1):1 で確かめた)．近い高さのものはひとつながりにする
+    # ただし OCR は，左の段の行末を中央まで数 pt はみ出させることがある (16(1):1 の ' Associations')．
+    # それを全幅とみなすと，帯が上下につながって本文の左右の段が交互に混ざるので，
+    # 細い断片は，同じ高さに段の中だけの断片が左右そろってあれば，段の行のはみ出しとみなす．
+    def crosses(f):
+        if not (f.x0 < mid - 8 < mid + 8 < f.x1):
+            return False
+        if f.x1 - f.x0 >= colw * 1.15:
+            return True          # 要旨・2段にまたがる図表の行 (段より明らかに広い)
+        return abs((f.x0 + f.x1) / 2 - mid) <= 15   # 中央揃えの題名・著者・所属
+
     zones = []
-    for f, _ in sorted((f for f in frs if f[0].x0 < mid - 8 < mid + 8 < f[0].x1), key=lambda f: f[0].y0):
+    for f, _ in sorted((f for f in frs if crosses(f[0])), key=lambda f: f[0].y0):
         if zones and f.y0 - zones[-1].y1 <= 40:
             zones[-1] |= f
         else:

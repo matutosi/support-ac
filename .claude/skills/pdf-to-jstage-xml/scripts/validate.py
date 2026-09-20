@@ -15,6 +15,7 @@ build.py が作った out/manifest.json と <記事識別子>.zip も見る (画
 """
 import posixpath
 import re
+import time
 import sys
 import urllib.error
 import urllib.request
@@ -31,12 +32,32 @@ DTD_MAIN = "JATS-journalpublishing1.dtd"
 NS = {"xlink": "http://www.w3.org/1999/xlink"}
 
 
+def fetch_dtd(url, tries=4):
+    """DTD の一部を取る．404 は None (条件付きで参照されるだけのもの)．
+    それ以外の失敗は間を空けて試し直し，最後まで駄目なら止める
+    (黙って飛ばすと DTD が欠けたまま残り，次回以降も取り直されないため)．"""
+    for i in range(tries):
+        try:
+            return urllib.request.urlopen(url, timeout=60).read()
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                return None
+            last = e
+        except Exception as e:  # 通信の失敗
+            last = e
+        if i < tries - 1:
+            time.sleep(2 ** i)
+    raise SystemExit(
+        f"DTD を取れなかった: {url} ({last})\n"
+        "  ネットワークが J-STAGE に出られない環境かもしれない (串やプロキシの遮断)．\n"
+        f"  出られる所で一度 validate.py を走らせ，できた {DTD_DIR} をそのまま持ち込めば，\n"
+        "  以後は取得せずに検証できる (dtd/ は git では追跡しない)．")
+
+
 def ensure_dtd():
-    if (DTD_DIR / DTD_MAIN).exists():
-        return
-    print("DTD を J-STAGE から取得する (初回だけ)")
     pat = re.compile(r'(?:SYSTEM|PUBLIC\s+"[^"]*")\s*"([^"]+\.(?:ent|dtd|mod))"', re.S)
-    todo, seen, failed = [DTD_MAIN], set(), []
+    todo, seen, got, missing = [DTD_MAIN], set(), 0, []
+    said = False
     while todo:
         f = todo.pop()
         if f in seen:
@@ -44,34 +65,22 @@ def ensure_dtd():
         seen.add(f)
         path = DTD_DIR / f
         if not path.exists():
-            try:
-                data = urllib.request.urlopen(DTD_BASE + f, timeout=60).read()
-            except urllib.error.HTTPError as e:
-                if e.code == 404:
-                    continue  # 条件付きで参照されるだけのもの (404) は無視してよい
-                failed.append((f, f"HTTP {e.code}"))
+            data = fetch_dtd(DTD_BASE + f)
+            if data is None:
+                missing.append(f)   # 404．条件付きで参照されるだけのものは無くてよい
                 continue
-            except Exception as e:  # 接続できない・遮断された・時間切れ
-                failed.append((f, f"{type(e).__name__}: {e}"))
-                continue
+            if not said:
+                print("DTD を J-STAGE から取得する (足りない分だけ)")
+                said = True
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
+            got += 1
         d = posixpath.dirname(f)
         for m in pat.findall(path.read_text(encoding="utf-8", errors="replace")):
             if not m.startswith("http"):
                 todo.append(posixpath.normpath(posixpath.join(d, m)))
-    if not (DTD_DIR / DTD_MAIN).exists():
-        why = next((w for f, w in failed if f == DTD_MAIN), "理由不明")
-        sys.exit(
-            f"DTD の本体 {DTD_MAIN} を {DTD_BASE} から取れなかった ({why})．\n"
-            "  ネットワークが J-STAGE に出られない環境かもしれない (串やプロキシの遮断)．\n"
-            f"  出られる所で一度 validate.py を走らせ，できた {DTD_DIR} をそのまま持ち込めば，\n"
-            "  以後は取得せずに検証できる (dtd/ は git では追跡しない)．")
-    if failed:
-        print(f"  取れなかったもの {len(failed)} 件 (DTD のエラーが出たらこれが原因かもしれない):")
-        for f, why in failed[:10]:
-            print(f"    {f}: {why}")
-    print(f"  {len(seen) - len(failed)} ファイル")
+    if got:
+        print(f"  {got} ファイルを取得 (一式 {len(seen) - len(missing)} ファイル)")
 
 
 def text_len(el):

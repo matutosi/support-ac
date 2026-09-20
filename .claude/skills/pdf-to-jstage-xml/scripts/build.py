@@ -423,9 +423,8 @@ def link_citations(text, refs, where):
         # 第一著者の名前か，著者の部分そのもの (「橘ヒサ子・樫村利道」) の先頭で照合する．
         # 同じ第一著者・同じ年の文献が2件あるときは，2人目まで書いて選び分ける
         def match(r):
-            if not r.names:
-                return False
-            heads = [r.names[0], getattr(r, "auth", "")]
+            # 著者を人ごとに分けられなかった文献 (原文にカンマが無いなど) は auth だけで見る
+            heads = [r.names[0] if r.names else "", getattr(r, "auth", "")]
             return any(re.sub(r"[\s　]", "", h).startswith(key) for h in heads if h)
         hit = [r for r in refs if r.year == m.group(2) and match(r)]
         if len(hit) == 1:

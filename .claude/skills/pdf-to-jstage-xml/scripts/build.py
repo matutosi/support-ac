@@ -234,7 +234,11 @@ class Ref:
             title = rest[:jm.start("src")]
             body = (self.title_xml(title) + inline(esc(rest[jm.start("src"):jm.start("src")])) +
                     self.tail_journal(rest, jm))
-        elif bm and not re.search(r"(In:|編「|（編）|pp\.)", rest):
+        # 出版社の候補に閉じ括弧だけが入るのは切れ目の取り違え
+        # (「…（付着色植生図　4，付表），横浜．」．植生学会誌 14(2) の B6)
+        elif (bm and not re.search(r"(In:|編「|（編）|pp\.)", rest)
+              and bm.group("pub").count("）") <= bm.group("pub").count("（")
+              and bm.group("pub").count(")") <= bm.group("pub").count("(")):
             self.kind = "book"
             title = rest[:bm.start("pub")]
             t2 = title.rstrip()

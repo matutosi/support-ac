@@ -490,6 +490,7 @@ def link_floats(text, floats):
     """「図1」「表1」を図表へのリンクにする．「図2，3，4」「図3, 4」の2つ目以降の番号もリンクする．
 
     1990 年代の号のように，和文の中で「Fig. 1」「Table 1」と英語で呼ぶ論文もある．
+    複数形 (「Figs. 3 and 4」「Tables 1, 2」) も，「and」でつないだ2つ目以降もリンクする．
     """
     def one(kind, num, shown):
         key = ("F" if kind == "図" or kind.startswith("Fig") else "T") + num   # Fig./Figure/図 → F
@@ -501,10 +502,11 @@ def link_floats(text, floats):
     def rep(m):
         kind = m.group(1)
         out = one(kind, m.group(3), m.group(1) + m.group(2) + m.group(3))
-        for mm in re.finditer(r"(\s*[，,、]\s*)(\d+)", m.group(4)):
+        for mm in re.finditer(r"(\s*(?:[，,、]|and|&|＆)\s*)(\d+)", m.group(4)):
             out += mm.group(1) + one(kind, mm.group(2), mm.group(2))
         return out
-    return re.sub(r"(図|表|Fig\.|Figure|Fig|Table)(\s*)(\d+)((?:\s*[，,、]\s*\d+(?![\d.]))*)", rep, text)
+    return re.sub(r"(図|表|Figs\.|Fig\.|Figures|Figure|Figs|Fig|Tables|Table)(\s*)(\d+)"
+                  r"((?:\s*(?:[，,、]|and|&|＆)\s*\d+(?![\d.]))*)", rep, text)
 
 
 def link_formulas(text, floats):

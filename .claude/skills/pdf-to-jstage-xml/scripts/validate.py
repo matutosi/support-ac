@@ -61,13 +61,13 @@ def ensure_dtd():
         seen.add(f)
         path = DTD_DIR / f
         if not path.exists():
-            if not said:
-                print("DTD を J-STAGE から取得する (足りない分だけ)")
-                said = True
             data = fetch_dtd(DTD_BASE + f)
             if data is None:
                 missing.append(f)   # 404．条件付きで参照されるだけのものは無くてよい
                 continue
+            if not said:
+                print("DTD を J-STAGE から取得する (足りない分だけ)")
+                said = True
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
             got += 1

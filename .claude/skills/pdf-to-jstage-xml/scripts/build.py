@@ -45,7 +45,11 @@ def attr(s):
 # ================================================================ 文中の修飾
 
 def inline(s):
-    """escape ずみの文字列に *斜体*・**太字**・^上付き^・~下付き~・URL の印を付ける．"""
+    """escape ずみの文字列に *斜体*・**太字**・^上付き^・~下付き~・URL の印を付ける．
+
+    印にしたくない「*」は `\\*` と書く (表の脚注の「*1: …」など．16(1):57)．
+    """
+    s = s.replace("\\*", "\x00")          # 印にしない「*」をいったん外す
     s = re.sub(r"\*\*(.+?)\*\*", r"<bold>\1</bold>", s)
     # 前後の字で区切るのは，語の中の「*」(N*・log*x*) を印と取り違えないため．
     # \w は仮名・漢字にも当たるので，和文に接した学名 (「山麓部に*Abies*の…」) が
@@ -55,7 +59,7 @@ def inline(s):
     s = re.sub(r"(?<![~〜])~([^~\s][^~]*?)~(?!~)", r"<sub>\1</sub>", s)
     s = re.sub(r"(https?://[A-Za-z0-9._~:/?#\[\]@!$&'()*+;=%-]+?)(?=[，。．、）)\s]|$|\.(?:\s|$))",
                lambda m: f'<ext-link ext-link-type="uri" xlink:href="{m.group(1)}">{m.group(1)}</ext-link>', s)
-    return s
+    return s.replace("\x00", "*")
 
 
 # ================================================================ 引用文献
@@ -413,27 +417,35 @@ def author_matches(window, ref, raw=None):
 CITE_YEAR = re.compile(r"(?<![\d./:])((?:1[89]|20)\d{2})([a-z]?)(?![\d])")
 
 
-MANUAL = re.compile(r"\{\{([^|{}]+?)\s+((?:1[89]|20)\d{2}[a-z]?)\|([^{}]+)\}\}")
+MANUAL = re.compile(r"\{\{(?:(?P<rid>B\d+)|(?P<key>[^|{}]+?)\s+(?P<year>(?:1[89]|20)\d{2}[a-z]?))"
+                    r"\|(?P<shown>[^{}]+)\}\}")
 
 
 def link_citations(text, refs, where):
-    """AI が手で指定したリンク {{著者名の先頭 年|表示}} を先に処理し，残りを自動でリンクする．
+    """AI が手で指定したリンク {{著者名の先頭 年|表示}}・{{B12|表示}} を先に処理し，残りを自動でリンクする．
 
     AI が手で指定するのは，原文の表記揺れで自動では当たらないとき
     (例: 本文「北海道環境科学センター（2005）」と文献「北海道環境科学研究センター 2005」)．
+    著者名と年では引けないとき (同じ著者の同じ年の文献が2件あり，本文はどちらも「村上 1985」と
+    書いている場合など) は，文献の番号で {{B20|村上 1985}} と書く (16(1):39・16(1):57)．
     表示の文字は原文のまま残す (PDF と HTML の内容は同一でなければならないため)．
     """
     out, pos = [], 0
+    by_id = {r.id: r for r in refs}
     for m in MANUAL.finditer(text):
         out.append(auto_citations(text[pos:m.start()], refs, where))
-        key = re.sub(r"[\s　]", "", m.group(1))
-        hit = [r for r in refs if r.year == m.group(2) and r.names and
-               re.sub(r"[\s　]", "", r.names[0]).startswith(key)]
+        shown = m.group("shown")
+        if m.group("rid"):
+            hit = [by_id[m.group("rid")]] if m.group("rid") in by_id else []
+        else:
+            key = re.sub(r"[\s　]", "", m.group("key"))
+            hit = [r for r in refs if r.year == m.group("year") and r.names and
+                   re.sub(r"[\s　]", "", r.names[0]).startswith(key)]
         if len(hit) == 1:
-            out.append(f"\x01{hit[0].id}\x02{m.group(3)}\x03")
+            out.append(f"\x01{hit[0].id}\x02{shown}\x03")
         else:
             REPORT.append(f"AI が手で指定したリンクの文献が{'見つからない' if not hit else '複数ある'} ({where}): {m.group(0)}")
-            out.append(m.group(3))
+            out.append(shown)
         pos = m.end()
     out.append(auto_citations(text[pos:], refs, where))
     return "".join(out)

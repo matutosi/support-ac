@@ -78,6 +78,16 @@ sections:
   refs: [引用文献, 文献, REFERENCES, References]      # 1990 年代の和文は「文献」
   appendix: [付録, APPENDIX, Appendix]
 
+# 紙をスキャンした旧号 (extract_scan.py) 用の設定
+scan:
+  # 柱と透かしのうち，この雑誌に固有のもの (OCR が字を崩した形も並べる)．
+  # NII-ELS が全ページに入れる「NII-Electronic Library Service」などは，
+  # 雑誌によらないのでスクリプト側 (extract_scan.py の JUNK_COMMON) に置いてある．
+  junk: '(Society|Sooiety|Sooietv|▽egetation|Vegetation Science$|Soienoe)'
+  # 図表の題の見つけ方．OCR は約物を全角にし字も崩すので (「Tab且e 2．」)，
+  # 上の layout.caption_pattern より緩く見る
+  caption_pattern: '^(図|表|Fig|Tab)[^\d]{0,4}(\d+)'
+
 # 引用文献の書式 (scripts/refs.py の規則を選ぶ)
 reference_style: author-year
 

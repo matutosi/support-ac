@@ -40,12 +40,15 @@ import layout                                         # noqa: E402
 SKILL_DIR = Path(__file__).resolve().parent.parent
 REPORT = []
 
-# スキャンの透かし (NII-ELS が全ページの上下に入れたもの)．字が崩れた形も拾う
-JUNK = re.compile(r"(Society|Sooiety|Sooietv|▽egetation|Vegetation Science$|Soienoe|"
-                  r"NII[- ]?Electronic|NII-|Eleotronio|Library Service|N 工工|工工一)")
+# スキャンの透かし (NII-ELS が全ページの上下に入れたもの)．字が崩れた形も拾う．
+# ここは雑誌によらない分だけ．学会名などの雑誌固有の分は設定の scan.junk から足す (main)
+JUNK_COMMON = r"NII[- ]?Electronic|NII-|Eleotronio|Library Service|N 工工|工工一"
+JUNK = re.compile(JUNK_COMMON)
 JA = r"ぁ-んァ-ヶ一-龥々ー"
-# 図表の題．OCR は約物を全角にし，字も崩すので (「Tab且e 2．」)，設定の caption_pattern より緩く見る
-CAP = re.compile(r"^(図|表|Fig|Tab)[^\d]{0,4}(\d+)")
+# 図表の題．OCR は約物を全角にし，字も崩すので (「Tab且e 2．」)，設定の caption_pattern より緩く見る．
+# 雑誌ごとに変えるときは設定の scan.caption_pattern に書く (main で差し替える)
+CAP_DEFAULT = r"^(図|表|Fig|Tab)[^\d]{0,4}(\d+)"
+CAP = re.compile(CAP_DEFAULT)
 # OCR が取り違えやすい字 (見た目が似ているもの)．直さずに report.txt へ出すだけ
 SUSPECT = re.compile(r"(crn|CIn|rn[のに]|至|孟|墨|正|齠|繝|【|】|工工|[０-９]|"
                      r"[A-Za-z][，．][A-Za-z]|[A-Za-z]{2,}[ぁ-んァ-ヶ])")
@@ -285,7 +288,13 @@ def main():
         print("DTP で組んだ PDF なので extract.py で処理する", file=sys.stderr)
         import extract
         return extract.hand_over(extract, args)
-    cap_pat = CAP   # スキャンは約物が崩れるので，設定の caption_pattern は使わない
+    # 雑誌固有の透かしと図表の題の形を設定から取る (scan の節が無ければ既定のまま)
+    global JUNK, CAP
+    scan_cfg = prof.get("scan") or {}
+    if scan_cfg.get("junk"):
+        JUNK = re.compile(f"(?:{JUNK_COMMON})|(?:{scan_cfg['junk']})")
+    CAP = re.compile(scan_cfg.get("caption_pattern") or CAP_DEFAULT)
+    cap_pat = CAP   # スキャンは約物が崩れるので，設定の layout.caption_pattern は使わない
     sec = prof["sections"]
     names = lambda k: [sec[k]] if isinstance(sec[k], str) else list(sec[k])
     out = Path(args.out)

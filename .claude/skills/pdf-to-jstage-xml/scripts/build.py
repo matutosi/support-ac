@@ -64,11 +64,11 @@ def inline(s):
 
 # ================================================================ 引用文献
 
-ORG = re.compile(r"(財団|協会|学会|省|庁|局|課|県|市|町|村役場|研究所|委員会|センター|会議|組合|機構|"
+ORG = re.compile(r"(財団|協会|学会|省|庁|局|課|県|市|町|村役場|研究所|委員会|センター|会議|組合|機構|グループ|調査団|"
                  r"Ministry|Society|Agency|Institute|Committee|Council|Association)")
 
 
-ORG_END = re.compile(r"(財団|協会|学会|省|庁|局|課|部|室|県|市|町|村|研究所|委員会|センター|会議|組合|機構|"
+ORG_END = re.compile(r"(財団|協会|学会|省|庁|局|課|部|室|県|市|町|村|研究所|委員会|センター|会議|組合|機構|グループ|調査団|"
                      r"編|ほか)$")
 
 
@@ -114,7 +114,9 @@ def tag_ja_name(name):
         core = m.group(1)
         name = core.rstrip()
         suffix = core[len(name):] + m.group(2)   # 「奥田重俊 編」の空白を残す
-    if ORG.search(name):
+    # 団体の字で終わるか，人名としては長すぎるときだけ団体とみなす
+    # (「岡本省吾」の「省」だけで団体にしていた．16(1):39 の B35)
+    if ORG_END.search(name.strip()) or (ORG.search(name) and len(name.strip()) >= 6):
         return f'<collab xml:lang="ja">{esc(name)}</collab>{esc(suffix)}'
     parts = re.split(r"[\s　]+", name.strip(), maxsplit=1)
     if len(parts) == 2:
@@ -174,7 +176,7 @@ JOURNAL_TAIL = re.compile(
     r"(?:\s*[-–−₋~〜～]\s*(?P<lp>[A-Za-z]?\d+))?"
     # 「1-10, pls. 1-4.」のように図版の付記が続くことがある (植生学会誌 13(2) の B3)
     r"(?:\s*[,，]\s*(?:pls?|figs?)\s*\.?\s*[\dA-Za-z,\s\-–−]*)?"
-    r"(?:\s*\+\s*[^.．]*)?"
+    r"(?:\s*[+＋]\s*[^.．]*)?"
     # 古い和文の雑誌は，ページのあとに発行地が続くことがある
     # (「寒地農学，2（2）：143−173，札幌．」．16(1):13 の B12)
     r"(?:\s*[,，]\s*[^.．,，:：\d][^.．,，:：]{0,9})?"
@@ -1011,11 +1013,23 @@ def build_front(meta, prof, abstract_ja, refs, floats):
         o.append("</permissions>")
 
     ab = meta.get("abstract") or {}
-    paras = abstract_ja if lang == "ja" and abstract_ja else ([ab[lang]] if ab.get(lang) else [])
+    # meta.yaml の要旨は，改行で段落に分ける (紙面が段落を分けている要旨があるため．16(1):1)．
+    # 和文は body.md の「# 摘要」があればそちらを使う (段落がそのまま残っているので)
+    def ab_paras(lg):
+        return [x.strip() for x in re.split(r"\n\s*", ab.get(lg) or "") if x.strip()]
+
+    def paras_of(lg):
+        # 和文の摘要は body.md にあればそちらを使う．英文の論文でも同じ
+        # (それまでは英文の論文だと J-STAGE 登録版の1段落が使われていた．16(1):1)
+        return abstract_ja if lg == "ja" and abstract_ja else ab_paras(lg)
+
+    paras = paras_of(lang)
     if paras:
         o.append(f'<abstract xml:lang="{lang}">' + "".join(f"<p>{inline(esc(p))}</p>" for p in paras) + "</abstract>")
-    if ab.get(other):
-        o.append(f'<trans-abstract xml:lang="{other}"><p>{inline(esc(ab[other]))}</p></trans-abstract>')
+    op = paras_of(other)
+    if op:
+        o.append(f'<trans-abstract xml:lang="{other}">'
+                 + "".join(f"<p>{inline(esc(x))}</p>" for x in op) + "</trans-abstract>")
     for lg in ("ja", "en"):
         kws = (meta.get("keywords") or {}).get(lg) or []
         if kws:

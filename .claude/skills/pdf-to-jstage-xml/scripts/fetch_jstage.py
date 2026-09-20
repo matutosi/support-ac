@@ -46,7 +46,11 @@ def first(ms, key):
 
 
 def authors_with_affs(ms):
-    """authors と authors_institutions の並びから，著者ごとの所属の列を作る．"""
+    """authors と authors_institutions の並びから，著者ごとの所属の列を作る．
+
+    J-STAGE の登録は，和文と英文で著者の数が違うことがある (13(1):51 は和名1件・英名2件)．
+    そのまま組むと別人が1人になるので，数が合わないときは警告する (人が PDF で直す)．
+    """
     out = []
     for k, v in ms:
         if k == "authors":
@@ -106,18 +110,28 @@ def main():
 
     # 著者と所属 (日英は同じ並びで載っている)
     a_ja, a_en = authors_with_affs(ja), authors_with_affs(en)
+    if len(a_ja) != len(a_en):
+        print(f"注意: 著者の数が和文 {len(a_ja)} 件・英文 {len(a_en)} 件で合わない．"
+              f"別人が1人にならないよう，PDF の1ページ目を見て meta.yaml の authors と "
+              f"affiliations を直すこと", file=sys.stderr)
     affs, aff_ids, authors = [], {}, []
-    for i, (name_ja, insts_ja) in enumerate(a_ja):
+    for i in range(max(len(a_ja), len(a_en))):
+        name_ja, insts_ja = a_ja[i] if i < len(a_ja) else ("", [])
         name_en, insts_en = a_en[i] if i < len(a_en) else ("", [])
         ids = []
-        for j, inst in enumerate(insts_ja):
-            inst_en = insts_en[j] if j < len(insts_en) else ""
+        for j, inst in enumerate(insts_ja or insts_en):
+            inst_ja = inst if insts_ja else ""
+            inst_en = (insts_en[j] if j < len(insts_en) else "") if insts_ja else inst
             if inst not in aff_ids:
                 aff_ids[inst] = len(affs) + 1
-                affs.append({"id": aff_ids[inst], "ja": inst, "en": inst_en, "country": "JP"})
+                affs.append({"id": aff_ids[inst], "ja": inst_ja, "en": inst_en, "country": "JP"})
             ids.append(aff_ids[inst])
-        authors.append({"name": {"ja": split_ja(name_ja), "en": split_en(name_en)},
-                        "aff": ids, "corresp": False, "email": None})
+        name = {}
+        if name_ja:
+            name["ja"] = split_ja(name_ja)
+        if name_en:
+            name["en"] = split_en(name_en)
+        authors.append({"name": name, "aff": ids, "corresp": False, "email": None})
 
     # 受付日・受理日は本文の表示から取る (meta には無い)
     def date_of(label):

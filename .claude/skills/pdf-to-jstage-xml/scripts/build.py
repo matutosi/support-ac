@@ -459,7 +459,7 @@ def link_floats(text, floats):
     1990 年代の号のように，和文の中で「Fig. 1」「Table 1」と英語で呼ぶ論文もある．
     """
     def one(kind, num, shown):
-        key = ("F" if kind == "図" or kind.startswith("Fig") else "T") + num
+        key = ("F" if kind == "図" or kind.startswith("Fig") else "T") + num   # Fig./Figure/図 → F
         if key not in floats:
             REPORT.append(f"本文の {kind}{num} に対応する図表が無い")
             return shown
@@ -471,7 +471,7 @@ def link_floats(text, floats):
         for mm in re.finditer(r"(\s*[，,、]\s*)(\d+)", m.group(4)):
             out += mm.group(1) + one(kind, mm.group(2), mm.group(2))
         return out
-    return re.sub(r"(図|表|Fig\.|Fig|Table)(\s*)(\d+)((?:\s*[，,、]\s*\d+(?![\d.]))*)", rep, text)
+    return re.sub(r"(図|表|Fig\.|Figure|Fig|Table)(\s*)(\d+)((?:\s*[，,、]\s*\d+(?![\d.]))*)", rep, text)
 
 
 def link_formulas(text, floats):
@@ -878,7 +878,8 @@ def build_front(meta, prof, abstract_ja, refs, floats):
         for lg in ("ja", "en"):
             if af.get(lg):
                 o.append(f'<aff xml:lang="{lg}"><institution>{esc(af[lg])}</institution>'
-                         f'<country country="{af.get("country", "JP")}">{"日本" if lg == "ja" else "Japan"}</country></aff>')
+                         f'<country country="{af.get("country", "JP")}">'
+                         f'{country_name(af.get("country", "JP"), lg)}</country></aff>')
         o.append("</aff-alternatives>")
     o.append("</contrib-group>")
 
@@ -923,6 +924,18 @@ def build_front(meta, prof, abstract_ja, refs, floats):
                      + "".join(f"<kwd>{inline(esc(k))}</kwd>" for k in kws) + "</kwd-group>")
     o += ["</article-meta>", "</front>"]
     return "\n".join(o)
+
+
+# 国名 (所属に country: を書いたときに使う．無い国は符号をそのまま出す)
+COUNTRIES = {"JP": ("日本", "Japan"), "NP": ("ネパール", "Nepal"), "US": ("アメリカ合衆国", "USA"),
+             "GB": ("イギリス", "UK"), "CN": ("中国", "China"), "KR": ("韓国", "Korea"),
+             "RU": ("ロシア", "Russia"), "DE": ("ドイツ", "Germany"), "FR": ("フランス", "France"),
+             "AU": ("オーストラリア", "Australia"), "TW": ("台湾", "Taiwan")}
+
+
+def country_name(code, lang):
+    ja, en = COUNTRIES.get(code, (code, code))
+    return ja if lang == "ja" else en
 
 
 def build_back(ack, refs, titles):

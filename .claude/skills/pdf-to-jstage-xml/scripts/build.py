@@ -166,8 +166,11 @@ CHAPTER_JA = re.compile(
     r"^(?P<title>.+?[.．])\s*(?P<eds>[^「」．.]+?)編「(?P<src>[^」]+)」\s*[,，]\s*(?P<fp>\d+)(?:\s*[-–]\s*(?P<lp>\d+))?"
     r"\s*[.．]\s*(?P<pub>[^,，．.]+?)\s*[,，]\s*(?P<loc>[^.．]+?)\s*[.．]\s*$")
 # 章題．「書名」（編者編），ページ．出版社，所在地．(植生学会誌 37(1) の文献 B5・B12)
+# 編者は「編」のほか「編著」「監修」とも書かれ，書かれないこともある．
+# ページは「pp. 87-100」のように pp. が付くこともある (植生学会誌 14(1) の文献)
 CHAPTER_JA2 = re.compile(
-    r"^(?P<title>.+?[.．])\s*「(?P<src>[^」]+)」\s*[（(](?P<eds>[^）)]+?)\s*編[）)]\s*[,，]\s*(?P<fp>\d+)"
+    r"^(?P<title>.+?[.．])\s*「(?P<src>[^」]+)」\s*"
+    r"(?:[（(](?P<eds>[^）)]+?)\s*(?:編著|編|監修)[）)])?\s*[,，]\s*(?:pp?\s*\.\s*)?(?P<fp>\d+)"
     r"(?:\s*[-–]\s*(?P<lp>\d+))?\s*[.．]\s*(?P<pub>[^,，．.]+?)\s*[,，]\s*(?P<loc>[^.．]+?)\s*[.．]\s*$")
 CHAPTER_EN = re.compile(
     r"^(?P<title>.+?\.)\s*In:\s*(?P<eds>.+?)\s*\(?eds?\.\)?\s*(?P<src>.+?),\s*(?P<fp>\d+)\s*[-–]\s*(?P<lp>\d+)\.\s*(?P<pub>.+)$")
@@ -257,8 +260,10 @@ class Ref:
     def chapter_xml(self, rest, m):
         """編著の1章．どの書き方でも，見つけた部分 (章題・編者・書名・ページ・出版社・所在地) を
         元の文の位置のままタグで囲む (前後の空白はタグの外に出す)．"""
-        eds = m.group("eds")
-        if self.lang == "ja":
+        eds = m.group("eds") if "eds" in m.groupdict() else None
+        if not eds:
+            eds_xml = ""
+        elif self.lang == "ja":
             parts, pos = [], 0
             for a, b in split_ja_names(eds):
                 parts.append(esc(eds[pos:a]) + tag_ja_name(eds[a:b]))

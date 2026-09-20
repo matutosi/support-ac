@@ -70,6 +70,9 @@ def split_ja_names(auth):
 
     団体名の中の「・」では分けない．「環境省水・大気環境局 水環境課」のように，団体を表す字 (省・局など) を
     含むのにそれで終わっていない部分は，次の部分とつなぐ (植生学会誌 37(1) の文献 B9)．
+
+    ただし人の名前にも団体の字が入る (「市川浩一郎」の「市」)．**次の部分が団体の字で終わるときだけ**
+    つなぐことで，人の名前を団体と取り違えないようにする (13(2):59 の文献 B8)．
     """
     parts, pos = [], 0
     for part in re.split(r"(・)", auth):
@@ -77,14 +80,20 @@ def split_ja_names(auth):
             start = auth.index(part, pos)
             parts.append([start, start + len(part)])
         pos += len(part)
+
+    def incomplete_org(name, nxt):
+        """name が団体名の途中か (次の部分 nxt が団体の字で終わるときだけ真)．"""
+        return (bool(ORG.search(name)) and not ORG_END.search(name)
+                and nxt is not None and bool(ORG_END.search(nxt.strip())))
+
     out = []
-    for a, b in parts:
+    for i, (a, b) in enumerate(parts):
+        nxt = auth[parts[i + 1][0]:parts[i + 1][1]] if i + 1 < len(parts) else None
         if out and out[-1][2]:
             out[-1][1] = b                       # 前の部分 (団体名の途中) とつなぐ
-            out[-1][2] = bool(ORG.search(auth[out[-1][0]:b])) and not ORG_END.search(auth[out[-1][0]:b].strip())
+            out[-1][2] = incomplete_org(auth[out[-1][0]:b].strip(), nxt)
             continue
-        name = auth[a:b].strip()
-        out.append([a, b, bool(ORG.search(name)) and not ORG_END.search(name)])
+        out.append([a, b, incomplete_org(auth[a:b].strip(), nxt)])
     return [(a, b) for a, b, _ in out]
 
 
@@ -344,9 +353,10 @@ def author_matches(window, ref, raw=None):
                     if re.search(r"(?:^|[\s(\uff08\[\u300c\u300e,\uff0c;\uff1b:\uff1a])" + flex + r"[\s,\uff0c]*$", raw):
                         return True
         return False
-    etal = w.endswith("ほか")
+    # 「ほか」のほかに「ら」と書く号もある (13(2) など)
+    etal = w.endswith("ほか") or w.endswith("ら")
     if etal:
-        w = w[:-2]
+        w = w[:-2] if w.endswith("ほか") else w[:-1]
     m = KANJI_RUN.search(w)
     if not m:
         return False

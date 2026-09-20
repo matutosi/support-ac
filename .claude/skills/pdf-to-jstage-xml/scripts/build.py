@@ -152,11 +152,15 @@ YEAR = re.compile(r"^(?P<auth>.+?)\s*[（(]?(?P<year>(?:1[89]|20)\d{2})(?P<suf>[
 JOURNAL_TAIL = re.compile(
     # 誌名は *斜体* で囲まれていれば中に「.」があってもよい (J. Sci. Hiroshima Univ. など)
     r"\s*(?P<src>\*[^*]+\*|[^.．\s][^.．]*?)(?:\s*[,，]\s*|\s+)"
-    # 巻は「52-53」のような範囲や，「Suppl. 1」のような別冊の言い方もある
-    r"(?P<vol>(?:Suppl\.?\s*|Spec\.?\s*)?[A-Za-z]?\d+(?:\s*[-–−]\s*\d+)?[A-Za-z]?)"
+    # 巻は「52-53」のような範囲や，「Suppl. 1」のような別冊の言い方もある．
+    # 巻を立てず号だけの雑誌もある (「フロラ栃木，(3)：1-10」．植生学会誌 13(2) の B3)
+    r"(?:(?P<vol>(?:Suppl\.?\s*|Spec\.?\s*)?[A-Za-z]?\d+(?:\s*[-–−]\s*\d+)?[A-Za-z]?)"
+    r"(?:\s*[（(](?P<iss>[^)）]+)[)）])?|[（(](?P<iss2>[^)）]+)[)）])"
     # ページは「14：p.151．」のように p. が付くこともある (1ページだけの記事)
-    r"(?:\s*[（(](?P<iss>[^)）]+)[)）])?\s*[:：]\s*(?:p\s*\.\s*)?(?P<fp>[A-Za-z]?\d+)"
+    r"\s*[:：]\s*(?:p\s*\.\s*)?(?P<fp>[A-Za-z]?\d+)"
     r"(?:\s*[-–−₋]\s*(?P<lp>[A-Za-z]?\d+))?"
+    # 「1-10, pls. 1-4.」のように図版の付記が続くことがある (植生学会誌 13(2) の B3)
+    r"(?:\s*[,，]\s*(?:pls?|figs?)\s*\.?\s*[\dA-Za-z,\s\-–−]*)?"
     r"(?:\s*\+\s*[^.．]*)?\s*[.．]?\s*$")     # 「371-486+30 plates.」のような後ろ付きも雑誌として扱う
 CHAPTER_JA = re.compile(
     r"^(?P<title>.+?[.．])\s*(?P<eds>[^「」．.]+?)編「(?P<src>[^」]+)」\s*[,，]\s*(?P<fp>\d+)(?:\s*[-–]\s*(?P<lp>\d+))?"
@@ -298,12 +302,17 @@ class Ref:
     def tail_journal(self, rest, m):
         g = lambda k: esc(m.group(k))
         s = f'<source xml:lang="{self.lang}">{inline(esc(m.group("src").strip()))}</source>'
-        s += esc(rest[m.end("src"):m.start("vol")]) + f"<volume>{g('vol')}</volume>"
-        if m.group("iss"):
-            s += esc(rest[m.end("vol"):m.start("iss")]) + f"<issue>{g('iss')}</issue>"
-            s += esc(rest[m.end("iss"):m.start("fp")])
+        iss = "iss" if m.group("iss") else ("iss2" if m.group("iss2") else None)
+        if m.group("vol"):
+            s += esc(rest[m.end("src"):m.start("vol")]) + f"<volume>{g('vol')}</volume>"
+            pos = m.end("vol")
+        else:                       # 巻が無く号だけの雑誌
+            pos = m.end("src")
+        if iss:
+            s += esc(rest[pos:m.start(iss)]) + f"<issue>{g(iss)}</issue>"
+            s += esc(rest[m.end(iss):m.start("fp")])
         else:
-            s += esc(rest[m.end("vol"):m.start("fp")])
+            s += esc(rest[pos:m.start("fp")])
         s += f"<fpage>{g('fp')}</fpage>"
         if m.group("lp"):
             s += esc(rest[m.end("fp"):m.start("lp")]) + f"<lpage>{g('lp')}</lpage>" + esc(rest[m.end("lp"):])
@@ -705,7 +714,9 @@ class GraphicNames:
 def continued(dir_, stem):
     """figN.png と，その続きの figN_2.png, figN_3.png … を順に返す．"""
     first = dir_ / f"{stem}.png"
-    rest = sorted(dir_.glob(f"{stem}_*.png"), key=lambda p: int(p.stem.split("_")[-1]))
+    # 続きの部分は「table2_2.png」のように番号を付ける．番号でないものは確かめ用の切り出しとみて外す
+    rest = sorted((p for p in dir_.glob(f"{stem}_*.png") if p.stem.split("_")[-1].isdigit()),
+                  key=lambda p: int(p.stem.split("_")[-1]))
     return [p for p in [first] + rest if p.exists()]
 
 

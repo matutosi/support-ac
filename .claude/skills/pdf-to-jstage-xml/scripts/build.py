@@ -991,11 +991,15 @@ def build_front(meta, prof, abstract_ja, refs, floats):
         o.append("</permissions>")
 
     ab = meta.get("abstract") or {}
+    # body.md の「# 摘要」は PDF から書き写したもの．ウェブ版より正確なのでこちらを優先する
+    # (英文の論文では和文の摘要が trans-abstract に入る)
     paras = abstract_ja if lang == "ja" and abstract_ja else ([ab[lang]] if ab.get(lang) else [])
     if paras:
         o.append(f'<abstract xml:lang="{lang}">' + "".join(f"<p>{inline(esc(p))}</p>" for p in paras) + "</abstract>")
     if ab.get(other):
-        o.append(f'<trans-abstract xml:lang="{other}"><p>{inline(esc(ab[other]))}</p></trans-abstract>')
+        trans = abstract_ja if other == "ja" and abstract_ja else [ab[other]]
+        o.append(f'<trans-abstract xml:lang="{other}">'
+                 + "".join(f"<p>{inline(esc(t))}</p>" for t in trans) + "</trans-abstract>")
     for lg in ("ja", "en"):
         kws = (meta.get("keywords") or {}).get(lg) or []
         if kws:

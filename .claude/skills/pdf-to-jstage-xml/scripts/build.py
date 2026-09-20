@@ -136,8 +136,10 @@ def tag_en_authors(auth):
 YEAR = re.compile(r"^(?P<auth>.+?)\s*[（(]?(?P<year>(?:1[89]|20)\d{2})(?P<suf>[a-z]?)"
                   r"(?:\s*[-–−~〜]\s*\d{2,4})?[)）]?\s*[.．]\s*(?P<rest>.*)$")
 JOURNAL_TAIL = re.compile(
-    r"\s*(?P<src>[^.．\s][^.．]*?)(?:\s*[,，]\s*|\s+)(?P<vol>[A-Za-z]?\d+[A-Za-z]?)"
-    r"(?:\s*[（(](?P<iss>[^)）]+)[)）])?\s*[:：]\s*(?P<fp>[A-Za-z]?\d+)(?:\s*[-–−₋]\s*(?P<lp>[A-Za-z]?\d+))?\s*[.．]?\s*$")
+    r"\s*(?P<src>[^.．\s][^.．]*?)(?:\s*[,，]\s*|\s+)"
+    r"(?P<vol>[A-Za-z]?\d+(?:\s*[-–−]\s*\d+)?[A-Za-z]?)"     # 巻は「52-53」のような範囲もある
+    r"(?:\s*[（(](?P<iss>[^)）]+)[)）])?\s*[:：]\s*(?P<fp>[A-Za-z]?\d+)(?:\s*[-–−₋]\s*(?P<lp>[A-Za-z]?\d+))?"
+    r"(?:\s*\+\s*[^.．]*)?\s*[.．]?\s*$")     # 「371-486+30 plates.」のような後ろ付きも雑誌として扱う
 CHAPTER_JA = re.compile(
     r"^(?P<title>.+?[.．])\s*(?P<eds>[^「」．.]+?)編「(?P<src>[^」]+)」\s*[,，]\s*(?P<fp>\d+)(?:\s*[-–]\s*(?P<lp>\d+))?"
     r"\s*[.．]\s*(?P<pub>[^,，．.]+?)\s*[,，]\s*(?P<loc>[^.．]+?)\s*[.．]\s*$")
@@ -200,7 +202,7 @@ class Ref:
         elif jm and jm.group("src").strip():
             self.kind = "journal"
             title = rest[:jm.start("src")]
-            body = (self.title_xml(title) + esc(rest[jm.start("src"):jm.start("src")] ) +
+            body = (self.title_xml(title) + inline(esc(rest[jm.start("src"):jm.start("src")])) +
                     self.tail_journal(rest, jm))
         elif bm and not re.search(r"(In:|編「|（編）|pp\.)", rest):
             self.kind = "book"
@@ -208,19 +210,21 @@ class Ref:
             t2 = title.rstrip()
             end = re.search(r"[.．]\s*$", t2)
             main = t2[: end.start()] if end else t2
+            # タグで囲まない部分にも *斜体* の印が残ることがあるので inline を通す
             body = (f'<source xml:lang="{self.lang}">{inline(esc(main.strip()))}</source>'
-                    + esc(t2[len(main):]) + esc(title[len(t2):])
+                    + inline(esc(t2[len(main):])) + inline(esc(title[len(t2):]))
                     + f"<publisher-name>{esc(bm.group('pub'))}</publisher-name>"
-                    + esc(rest[bm.end("pub"):bm.start("loc")])
+                    + inline(esc(rest[bm.end("pub"):bm.start("loc")]))
                     + f"<publisher-loc>{esc(bm.group('loc'))}</publisher-loc>"
-                    + esc(rest[bm.end("loc"):]))
+                    + inline(esc(rest[bm.end("loc"):])))
         elif BOOK_PUB.search(rest) and not re.search(r"(In:|編「|（編）|pp\.)", rest):
             pm = BOOK_PUB.search(rest)
             self.kind = "book"
             main = rest[:pm.start()]
             body = (f'<source xml:lang="{self.lang}">{inline(esc(main))}</source>'
-                    + esc(rest[pm.start():pm.start("pub")])
-                    + f"<publisher-name>{esc(pm.group('pub'))}</publisher-name>" + esc(rest[pm.end("pub"):]))
+                    + inline(esc(rest[pm.start():pm.start("pub")]))
+                    + f"<publisher-name>{esc(pm.group('pub'))}</publisher-name>"
+                    + inline(esc(rest[pm.end("pub"):])))
         else:
             REPORT.append(f"文献の後半を分解できない (著者・年だけタグ付け): {self.id} {t[:70]}")
             body = inline(esc(rest))
@@ -899,7 +903,7 @@ def build_front(meta, prof, abstract_ja, refs, floats):
         kws = (meta.get("keywords") or {}).get(lg) or []
         if kws:
             o.append(f'<kwd-group kwd-group-type="author" xml:lang="{lg}">'
-                     + "".join(f"<kwd>{esc(k)}</kwd>" for k in kws) + "</kwd-group>")
+                     + "".join(f"<kwd>{inline(esc(k))}</kwd>" for k in kws) + "</kwd-group>")
     o += ["</article-meta>", "</front>"]
     return "\n".join(o)
 

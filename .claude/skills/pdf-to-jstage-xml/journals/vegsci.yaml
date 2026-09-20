@@ -24,6 +24,7 @@ article_types:
   資料:     {type: other,                en: Data}
   特集:     {type: other,                en: Special Feature}
   寄稿:     {type: other,                en: Contribution}
+  訂正:     {type: correction,           en: Correction}
 
 # 体裁が変わった巻号 (2026-09-20 に jstage/pdf_fingerprint.py の二分探索で特定)．
 # `from: [巻, 号]` から，次の項目の手前まで．scripts/layout.py が使う．

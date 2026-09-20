@@ -878,7 +878,10 @@ def build_front(meta, prof, abstract_ja, refs, floats):
         o.append(f'<trans-title-group xml:lang="{other}"><trans-title>{inline(esc(t[other]))}</trans-title></trans-title-group>')
     o.append("</title-group>")
 
-    o.append("<contrib-group>")
+    # 訂正記事のように著者の無い記事では contrib-group を出さない (空だと DTD に合わない)
+    has_contrib = bool(meta["authors"]) or bool(meta["affiliations"])
+    if has_contrib:
+        o.append("<contrib-group>")
     for i, a in enumerate(meta["authors"]):
         at = ['contrib-type="author"']
         if a.get("corresp"):
@@ -910,7 +913,8 @@ def build_front(meta, prof, abstract_ja, refs, floats):
                          f'<country country="{af.get("country", "JP")}">'
                          f'{country_name(af.get("country", "JP"), lg)}</country></aff>')
         o.append("</aff-alternatives>")
-    o.append("</contrib-group>")
+    if has_contrib:
+        o.append("</contrib-group>")
 
     pd = meta.get("pub_date") or {}
     if pd.get("ppub"):

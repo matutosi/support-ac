@@ -583,6 +583,21 @@ def parse_body(path):
 
 # ================================================================ 本体
 
+def check_article_id(meta):
+    """記事識別子を取り出す．YAML が数として読んでしまった書き方をここで止める．
+
+    YAML 1.1 では下線は数の桁区切りなので，引用符の無い `article_id: 13_193` は
+    整数 13193 になり，そのままでは別の記事識別子の XML と zip ができてしまう．
+    """
+    art_id = meta.get("article_id")
+    if isinstance(art_id, (int, float)) and not isinstance(art_id, bool):
+        sys.exit(
+            f"meta.yaml の article_id が数として読まれている ({art_id!r})．\n"
+            "  YAML では下線が桁の区切りなので，引用符の無い 13_193 は 13193 になる．\n"
+            "  引用符で囲む:  article_id: '13_193'")
+    return str(art_id or f"{meta['volume']}_{meta['fpage']}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("work")
@@ -617,7 +632,7 @@ def main():
     refs = [Ref(i + 1, t) for i, t in enumerate(ref_lines)]
     floats = {b[1] for b in main_blocks if b[0] in ("fig", "table", "formula")}
     # 記事識別子は J-STAGE の既存のもの (meta.yaml の article_id) を使う．無ければ「巻_開始ページ」
-    art_id = str(meta.get("article_id") or f"{meta['volume']}_{meta['fpage']}")
+    art_id = check_article_id(meta)
     out_dir = work / manifest.OUT
     out_dir.mkdir(exist_ok=True)
     if (work / "jstage").is_dir():

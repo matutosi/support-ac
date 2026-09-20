@@ -16,6 +16,7 @@ build.py が作った out/manifest.json と <記事識別子>.zip も見る (画
 import posixpath
 import re
 import sys
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -35,7 +36,7 @@ def ensure_dtd():
         return
     print("DTD を J-STAGE から取得する (初回だけ)")
     pat = re.compile(r'(?:SYSTEM|PUBLIC\s+"[^"]*")\s*"([^"]+\.(?:ent|dtd|mod))"', re.S)
-    todo, seen = [DTD_MAIN], set()
+    todo, seen, failed = [DTD_MAIN], set(), []
     while todo:
         f = todo.pop()
         if f in seen:
@@ -45,15 +46,32 @@ def ensure_dtd():
         if not path.exists():
             try:
                 data = urllib.request.urlopen(DTD_BASE + f, timeout=60).read()
-            except Exception:
-                continue  # 条件付きで参照されるだけのもの (404) は無視してよい
+            except urllib.error.HTTPError as e:
+                if e.code == 404:
+                    continue  # 条件付きで参照されるだけのもの (404) は無視してよい
+                failed.append((f, f"HTTP {e.code}"))
+                continue
+            except Exception as e:  # 接続できない・遮断された・時間切れ
+                failed.append((f, f"{type(e).__name__}: {e}"))
+                continue
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
         d = posixpath.dirname(f)
         for m in pat.findall(path.read_text(encoding="utf-8", errors="replace")):
             if not m.startswith("http"):
                 todo.append(posixpath.normpath(posixpath.join(d, m)))
-    print(f"  {len(seen)} ファイル")
+    if not (DTD_DIR / DTD_MAIN).exists():
+        why = next((w for f, w in failed if f == DTD_MAIN), "理由不明")
+        sys.exit(
+            f"DTD の本体 {DTD_MAIN} を {DTD_BASE} から取れなかった ({why})．\n"
+            "  ネットワークが J-STAGE に出られない環境かもしれない (串やプロキシの遮断)．\n"
+            f"  出られる所で一度 validate.py を走らせ，できた {DTD_DIR} をそのまま持ち込めば，\n"
+            "  以後は取得せずに検証できる (dtd/ は git では追跡しない)．")
+    if failed:
+        print(f"  取れなかったもの {len(failed)} 件 (DTD のエラーが出たらこれが原因かもしれない):")
+        for f, why in failed[:10]:
+            print(f"    {f}: {why}")
+    print(f"  {len(seen) - len(failed)} ファイル")
 
 
 def text_len(el):

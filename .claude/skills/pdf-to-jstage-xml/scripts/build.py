@@ -89,6 +89,9 @@ def split_ja_names(auth):
 
 
 def tag_ja_name(name):
+    # 「ほか13名」のような人数の表記は名前ではないので，そのままの文字で出す
+    if re.fullmatch(r"[\s　]*(ほか|他)[\s　]*\d+[\s　]*名[\s　．.，,・]*", name):
+        return esc(name)
     suffix = ""
     m = re.match(r"^(.*?)(編|監修|ほか編|ほか)$", name)
     if m and m.group(1).strip():
@@ -129,7 +132,9 @@ def tag_en_authors(auth):
     return "".join(out), names
 
 
-YEAR = re.compile(r"^(?P<auth>.+?)\s*[（(]?(?P<year>(?:1[89]|20)\d{2})(?P<suf>[a-z]?)[)）]?\s*[.．]\s*(?P<rest>.*)$")
+# 年は「1996．」のほか，古い号では「1971-78．」「1979-80．」のような範囲で書かれることがある
+YEAR = re.compile(r"^(?P<auth>.+?)\s*[（(]?(?P<year>(?:1[89]|20)\d{2})(?P<suf>[a-z]?)"
+                  r"(?:\s*[-–−~〜]\s*\d{2,4})?[)）]?\s*[.．]\s*(?P<rest>.*)$")
 JOURNAL_TAIL = re.compile(
     r"\s*(?P<src>[^.．\s][^.．]*?)(?:\s*[,，]\s*|\s+)(?P<vol>[A-Za-z]?\d+[A-Za-z]?)"
     r"(?:\s*[（(](?P<iss>[^)）]+)[)）])?\s*[:：]\s*(?P<fp>[A-Za-z]?\d+)(?:\s*[-–−₋]\s*(?P<lp>[A-Za-z]?\d+))?\s*[.．]?\s*$")

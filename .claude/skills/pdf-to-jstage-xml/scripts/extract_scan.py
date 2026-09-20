@@ -404,6 +404,12 @@ def main():
                 clip = (pymupdf.Rect(x0, top, x1, cap_r.y0 - 3) if kind == "fig"
                         else pymupdf.Rect(x0, cap_r.y1 + 3, x1, bottom)) & page.rect
                 name = f"{kind}{num}.png"
+                if clip.width < 10 or clip.height < 10:
+                    # 枠がつぶれた (図題の位置から中身の範囲を決められなかった)．
+                    # 画像は作らず，ページ画像を見て crop.py で手で切り出す
+                    REPORT.append(f"p{pno}: {label} の枠がつぶれた {tuple(round(v) for v in clip)}．"
+                                  f"pages/p{pno:03d}.png を見て crop.py で切り出し，tables/ か figs/ に置く")
+                    continue
                 page.get_pixmap(dpi=args.dpi_fig if kind == "fig" else 200, clip=clip).save(
                     out / ("figs" if kind == "fig" else "tables") / name)
                 REPORT.append(f"p{pno}: {label} の枠 {tuple(round(v) for v in clip)} → {name}"

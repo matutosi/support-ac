@@ -142,7 +142,7 @@ python $S/extract.py W/<記事識別子>.pdf --journal vegsci --out W
   (13(1):1 は PDF 26 件・ウェブ 24 件)．**正は PDF**．`build_report.txt` の照合は参考にとどめる．
 - 1990 年代の号は，和文の中で図表を「Fig. 1」「Table 1」と英語で呼ぶ．`build.py` はこれもリンクする．
 
-### 2. AI が照合して直す (ここだけが手作業)
+### 2. AI が照合して直す (ここだけがAIによる手作業)
 
 `body.md` を `pages/p*.png` と見比べ，次を順に確かめる．**1つずつ終えてから次へ**．
 

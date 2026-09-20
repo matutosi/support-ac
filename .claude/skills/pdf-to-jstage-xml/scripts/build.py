@@ -203,6 +203,7 @@ class Ref:
             return
         self.year = m.group("year") + m.group("suf")
         auth = m.group("auth")
+        self.auth = auth          # 著者の部分そのまま (手で指定するリンクの照合に使う)
         if self.lang == "en":
             tagged, names = tag_en_authors(auth)
             if tagged is None:  # 団体名など
@@ -419,8 +420,14 @@ def link_citations(text, refs, where):
     for m in MANUAL.finditer(text):
         out.append(auto_citations(text[pos:m.start()], refs, where))
         key = re.sub(r"[\s　]", "", m.group(1))
-        hit = [r for r in refs if r.year == m.group(2) and r.names and
-               re.sub(r"[\s　]", "", r.names[0]).startswith(key)]
+        # 第一著者の名前か，著者の部分そのもの (「橘ヒサ子・樫村利道」) の先頭で照合する．
+        # 同じ第一著者・同じ年の文献が2件あるときは，2人目まで書いて選び分ける
+        def match(r):
+            if not r.names:
+                return False
+            heads = [r.names[0], getattr(r, "auth", "")]
+            return any(re.sub(r"[\s　]", "", h).startswith(key) for h in heads if h)
+        hit = [r for r in refs if r.year == m.group(2) and match(r)]
         if len(hit) == 1:
             out.append(f"\x01{hit[0].id}\x02{m.group(3)}\x03")
         else:

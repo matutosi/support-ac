@@ -143,7 +143,8 @@ YEAR = re.compile(r"^(?P<auth>.+?)\s*[（(]?(?P<year>(?:1[89]|20)\d{2})(?P<suf>[
 JOURNAL_TAIL = re.compile(
     # 誌名は *斜体* で囲まれていれば中に「.」があってもよい (J. Sci. Hiroshima Univ. など)
     r"\s*(?P<src>\*[^*]+\*|[^.．\s][^.．]*?)(?:\s*[,，]\s*|\s+)"
-    r"(?P<vol>[A-Za-z]?\d+(?:\s*[-–−]\s*\d+)?[A-Za-z]?)"     # 巻は「52-53」のような範囲もある
+    # 巻は「52-53」のような範囲や，「Suppl. 1」のような別冊の言い方もある
+    r"(?P<vol>(?:Suppl\.?\s*|Spec\.?\s*)?[A-Za-z]?\d+(?:\s*[-–−]\s*\d+)?[A-Za-z]?)"
     r"(?:\s*[（(](?P<iss>[^)）]+)[)）])?\s*[:：]\s*(?P<fp>[A-Za-z]?\d+)(?:\s*[-–−₋]\s*(?P<lp>[A-Za-z]?\d+))?"
     r"(?:\s*\+\s*[^.．]*)?\s*[.．]?\s*$")     # 「371-486+30 plates.」のような後ろ付きも雑誌として扱う
 CHAPTER_JA = re.compile(
@@ -155,7 +156,9 @@ CHAPTER_JA2 = re.compile(
     r"(?:\s*[-–]\s*(?P<lp>\d+))?\s*[.．]\s*(?P<pub>[^,，．.]+?)\s*[,，]\s*(?P<loc>[^.．]+?)\s*[.．]\s*$")
 CHAPTER_EN = re.compile(
     r"^(?P<title>.+?\.)\s*In:\s*(?P<eds>.+?)\s*\(?eds?\.\)?\s*(?P<src>.+?),\s*(?P<fp>\d+)\s*[-–]\s*(?P<lp>\d+)\.\s*(?P<pub>.+)$")
-BOOK_PUB = re.compile(r"[.．]\s*(?P<pub>[^.．,，「」]+?)\s*[.．]\s*$")   # 題名．出版社．(所在地なし)
+# 題名．出版社．(所在地なし)．ただし「…報告書（追加調査）．」のような副題は出版社ではない
+BOOK_PUB = re.compile(r"[.．]\s*(?P<pub>[^.．,，「」]+?)\s*[.．]\s*$")
+NOT_PUB = re.compile(r"(報告書|調査|目録|一覧|紀要|年報)$|[）)]$")
 BOOK_TAIL = re.compile(r"\s*(?P<pub>[^.．,，「」\s][^.．,，「」]*?)\s*[,，]\s*(?P<loc>[^.．,，「」]+?)\s*[.．]\s*$")
 
 
@@ -223,7 +226,7 @@ class Ref:
                     + inline(esc(rest[bm.end("pub"):bm.start("loc")]))
                     + f"<publisher-loc>{esc(bm.group('loc'))}</publisher-loc>"
                     + inline(esc(rest[bm.end("loc"):])))
-        elif BOOK_PUB.search(rest) and not re.search(r"(In:|編「|（編）|pp\.)", rest):
+        elif BOOK_PUB.search(rest) and not re.search(r"(In:|編「|（編）|pp\.)", rest)                 and not NOT_PUB.search(BOOK_PUB.search(rest).group("pub").strip()):
             pm = BOOK_PUB.search(rest)
             self.kind = "book"
             main = rest[:pm.start()]

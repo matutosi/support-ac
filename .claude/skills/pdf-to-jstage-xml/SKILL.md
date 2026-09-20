@@ -323,18 +323,63 @@ python $S/bundle.py W1 W2 W3 --out <出力先> [--kind update|new]
 
 ## 他の雑誌に広げるとき
 
-`journals/vegsci.yaml` を写して `journals/<資料コード>.yaml` を作り，次を合わせる．
+**スキル本体 (SKILL.md・scripts/) は雑誌によらない**．新しい雑誌を足すのは次の5歩．
 
-- `layout`: 見出しの書体と記号・段落の字下げ・キャプションの形．
-  **字の大きさ (本文・大見出し・文献) と柱・脚注の位置は PDF ごとに自動で決める** (`report.txt` の
-  「組み方 (自動)」)．設定の値は自動で決められないときの既定値．
-- `sections`: 摘要・謝辞・引用文献の見出しの文言．
-- `article_types`: 原稿種別と J-STAGE の article-type の対応．
-- `eras`: 体裁が変わった巻号 (`jstage/pdf_fingerprint.py` の二分探索で調べる)．
-- `scan`: 旧号がスキャンのとき，柱・透かしの文字 (`junk`) と図表の題の形 (`caption_pattern`)．
-- **その雑誌にだけ当てはまる覚え書きは `journals/<資料コード>.md`** に書く
-  (体裁の変遷・作った論文の実測・気をつけること)．SKILL.md には雑誌固有のことを書かない．
-- 引用が番号式 (1) や上付き番号) の雑誌は，`build.py` の `link_citations` に別の規則が要る (未実装)．
+### 1. 資料コードと ISSN を調べる
+
+記事の URL `https://www.jstage.jst.go.jp/article/<資料コード>/<巻>/<号>/<記事識別子>/…` の
+`<資料コード>`と，記事ページの ISSN (冊子・電子) を控える．電子 ISSN は `jstage/` の道具の `--issn` に使う．
+
+### 2. 設定を写す
+
+```
+cp journals/_template.yaml journals/<資料コード>.yaml
+cp journals/_template.md   journals/<資料コード>.md
+```
+
+`_template.yaml` の註に，どの値が**必須**で，どれが**自動で決まる**か，どれが**いまは使わない控え**かを書いてある．
+
+| 設定 | 要否 | 何を書くか・どう調べるか |
+|---|---|---|
+| `journal_id`・`issn`・`title`・`publisher`・`copyright_holder` | **必須** | 記事ページと奥付から |
+| `article_types` | **必須** | 1ページ目の帯や目次の言い方 → J-STAGE の article-type．**号による揺れもすべて並べる** |
+| `sections` | **必須** | 摘要・謝辞・引用文献の見出しの文言 (和英・号による揺れを並びで)．使うのはこの3つ |
+| `layout` | **要調整** | 見出しの書体と記号・字下げ・図表の題の形．**字の大きさと柱・脚注の位置は PDF ごとに自動**なので，ここの値は自動で決められなかったときの既定値 |
+| `eras` | 任意 | 体裁が変わった巻号 (`jstage/pdf_fingerprint.py <巻> <号> --issn <ISSN>` を二分探索)．無くても動く |
+| `scan` | スキャンの旧号があるときだけ | 柱・透かしのうち雑誌固有の文字と，図表の題の形 (OCR 用に緩く) |
+| `reference_style`・`doi_template` | 控え | **いまのスクリプトは読まない** |
+
+### 3. PDF が DTP かスキャンかを確かめる
+
+1本で `extract.py` を走らせると自動で振り分ける (`layout.detect`)．
+スキャンなら `scan.junk` に柱・透かしの文字を足す (`report.txt` の「透かし・柱として外した」の行を見て，
+外し漏れ・外しすぎを直す)．
+
+### 4. 1本で最後まで通し，値を合わせる
+
+`report.txt` の「組み方 (自動)」と `body.md` を見て，`layout` の見出し・字下げ・図表の題を直す．
+うまく出ないときに見る所:
+
+- 見出しが拾えない → `heading_font`・`heading1_prefix`・`heading1_size`・`heading2_size`
+- 段落が続いてしまう / 切れすぎる → `indent_min`
+- 引用文献が1件にまとまらない → `ref_indent_max`・`ref_size`
+- 図表の題を拾わない → `caption_pattern` (スキャンは `scan.caption_pattern`)
+- 学名が斜体にならない → `italic_font`
+
+`build.py` → `validate.py` で **DTD 妥当・エラー 0** まで通ったら設定は使える．
+
+### 5. 覚え書きを書く
+
+**その雑誌にだけ当てはまることは `journals/<資料コード>.md`** に書く (体裁の変遷・実測・注意)．
+SKILL.md には雑誌固有のことを書かない．
+
+### 合わないかもしれない所 (先に見ておく)
+
+- **引用が番号式 (1) や上付き番号) の雑誌**は，`build.py` の `link_citations` に別の規則が要る (未実装)．
+  「著者 年」式なら，姓の書き方 (和英・「ら」「et al.」) は今のままで扱える．
+- **図表の題が本文と同じ書体・大きさ**の雑誌は，`heading_font` では拾えない (`caption_pattern` に頼る)．
+- **3段組み・横書きでない紙面**は試していない．
+- 記事識別子の対応表が要るとき: `python jstage/article_ids.py update --vol <巻> --issn <電子 ISSN>`．
 
 ## できないこと (いまの版)
 

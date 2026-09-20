@@ -1,0 +1,83 @@
+# <誌名> の設定の雛形．`<資料コード>.yaml` という名前で写して使う
+# (資料コードは J-STAGE の記事 URL の /article/ の次．例 https://www.jstage.jst.go.jp/article/<資料コード>/…)
+#
+# **雑誌ごとに違うものだけをここに置く**．スクリプトの中に雑誌固有の値を書かない．
+# 「?」は分からなければ空のままでよい (スクリプトが PDF から決める・使わない) ．
+
+journal_id: <資料コード>      # 必須．XML の <journal-id journal-id-type="j-stage">
+issn:                        # 必須 (片方しか無ければもう一方は空でよい)
+  ppub: 0000-0000            #   冊子の ISSN
+  epub: 0000-0000            #   電子の ISSN．jstage の道具 (--issn) にも使う
+title:                       # 必須．XML の <journal-title>
+  ja: <和文の誌名>
+  en: <英文の誌名>
+publisher:                   # 必須．XML の <publisher-name>
+  ja: <発行者 (学会名)>
+  en: <発行者の英名>
+copyright_holder:            # 必須．XML の <copyright-holder>
+  ja: <著作権者>
+  en: <著作権者の英名>
+
+# 原稿種別 (1ページ目に刷ってある帯や目次の言い方) → J-STAGE の article-type と英語の種別名．
+# **紙面にある言い方をすべて並べる** (号によって「原著」「原著論文」と揺れることがある)．
+# J-STAGE が受ける article-type: review-article / research-article / brief-report /
+#   case-report / editorial / letter / correction / retraction / other など
+article_types:
+  総説:     {type: review-article,   en: Review}
+  原著論文: {type: research-article, en: Original Article}
+  短報:     {type: brief-report,     en: Short Communication}
+  資料:     {type: other,            en: Data}
+  訂正:     {type: correction,       en: Correction}
+
+# 体裁が変わった巻号 (無ければこの節ごと省いてよい)．
+# `from: [巻, 号]` から次の項目の手前まで．調べ方は
+#   python jstage/pdf_fingerprint.py <巻> <号> --issn <電子 ISSN>
+# を巻号を変えて二分探索する．**決めるのは PDF そのもの**で，この表は食い違いに気づくための控え．
+eras:
+  - from: [1, 1]
+    source: scan             # scan (紙をスキャンして OCR) か dtp (DTP で組んだ PDF)
+    refs_head: 文献          # その時期の引用文献の見出し
+    paper: A4                # ? 紙の大きさ (控え)
+  - from: [00, 0]
+    source: dtp
+    refs_head: 引用文献
+    body_size: 9.9           # ? 本文の字の大きさ (控え．実際は PDF ごとに決める)
+    category: 原著論文       # ? その時期の原稿種別の印字
+
+# 組版の判定に使う値 (単位は pt)．**字の大きさと柱・脚注の位置は PDF ごとに自動で決める**ので，
+# ここの値は自動で決められなかったときの既定値．見出しの書体と記号・字下げ・図表の題の形は要調整．
+# 調べ方: 1本を extract.py にかけ，`report.txt` の「組み方 (自動)」と `body.md` の見出しを見る．
+layout:
+  header_y_max: 62           # これより上は柱とノンブル
+  footer_y_min: 745          # これより下は脚注 (1ページ目の連絡先・受付日)
+  body_size: 9.9             # 本文の字の大きさ
+  ref_size: 8.5              # 引用文献の字の大きさ
+  size_tol: 0.35             # 字の大きさの許容差
+  indent_min: 5              # 行頭がこれ以上右にずれていたら段落の始まり (字下げ)
+  ref_indent_max: 3          # 引用文献: 行頭のずれがこれ未満なら新しい文献 (ぶら下げ字下げ)
+  heading_font: Gothic       # 見出しとキャプションの書体名に含まれる文字列 (例 Gothic, Bold)
+  heading1_size: 11.3        # 大見出しの字の大きさ
+  heading1_prefix: "■"       # 大見出しの頭に付く記号 (無ければ "")
+  heading2_size: 9.9         # 小見出しの字の大きさ
+  italic_font: Italic        # この文字列を含む書体は *斜体* にする
+  caption_pattern: '^(図|表|Fig\.|Table)\s*(\d+)'   # 図表の題の形
+
+# 特別な扱いをする節の見出し．号や言語によって言い方が違うので**並びで書く**．
+# 使うのは abstract・ack・refs の3つ (appendix は控え)．
+sections:
+  abstract: [摘要, 要約, ABSTRACT, Abstract]   # → <abstract> (本文からは外す)
+  ack: [謝辞, ACKNOWLEDGMENTS, Acknowledgements]
+  refs: [引用文献, 文献, REFERENCES, References]
+  appendix: [付録, APPENDIX, Appendix]
+
+# 紙をスキャンした旧号があるときだけ要る (extract_scan.py が使う)．
+# junk: 柱と透かしのうち**この雑誌に固有のもの** (学会名など)．OCR が崩した形も並べる
+#       (NII-ELS の「NII-Electronic Library Service」などは雑誌によらないのでスクリプト側にある)．
+# caption_pattern: OCR は約物を全角にし字も崩すので，上の layout.caption_pattern より緩く書く．
+scan:
+  junk: '(Society|<学会名の一部>)'
+  caption_pattern: '^(図|表|Fig|Tab)[^\d]{0,4}(\d+)'
+
+# 以下は**いまのスクリプトは読まない控え** (将来 refs.py を作るときと，DOI を手で入れるときの参考)
+reference_style: author-year                       # author-year か numbered か
+doi_template: "10.xxxxx/<資料コード>.{volume}.{fpage}"

@@ -119,6 +119,11 @@ def tag_en_authors(auth):
     for m in EN_NAME.finditer(auth):
         sur = m.group(1).strip()
         lead = m.group(1)[: len(m.group(1)) - len(m.group(1).lstrip())]
+        # 「Nakashizuka, T. and Numata, M.」の「and」は姓の一部ではないので，タグの外へ出す
+        conj = re.match(r"^(and\s+|&\s*)(.+)$", sur, re.I)
+        if conj:
+            lead += conj.group(1)
+            sur = conj.group(2)
         out.append(esc(auth[pos:m.start(1)]) + esc(lead))
         given = m.group(2).rstrip()
         trail = m.group(2)[len(given):]
@@ -304,12 +309,13 @@ DELIM = "(（;；,，:：、。．[ 「」『』*^"
 KANJI_RUN = re.compile(r"[\u3005\u3006\u30a0-\u30ff\u3400-\u9fff\uf900-\ufaff・]+$")
 
 
-def author_matches(window, ref):
+def author_matches(window, ref, raw=None):
     """window (年の直前の文字列．空白なし) が ref の著者表記で終わっているか．
 
     和文: 年の直前の漢字・カタカナのかたまり (「川村・大窪」「北川」+「ほか」) を切り出し，
     各部分が文献の著者名の先頭と一致するかで見る (末尾の1字だけの一致は採らない)．
     欧文: 「Surname」「S1 & S2」「S1 et al.」で終わり，その前が区切り記号であること．
+    **英文の論文**では著者名の前が語の切れ目 (空白) のこともあるので，空白を残した raw でも見る．
     """
     w = re.sub(r"(編|\(eds?\.\)|\(ed\.\)|eds?\.)$", "", window)
     n = len(ref.names)
@@ -329,6 +335,11 @@ def author_matches(window, ref):
                 if not before or before[-1] in DELIM or KANJI_RUN.search(before[-1:]) or \
                         re.search(r"[\u3040-\u309f]$", before):
                     return True
+                if raw:
+                    # \u300ccarried out by Jones (1965)\u300d\u306e\u3088\u3046\u306b\uff0c\u8457\u8005\u540d\u306e\u524d\u304c\u7a7a\u767d\u306e\u3053\u3068\u3082\u3042\u308b
+                    flex = r"\s*".join(re.escape(c) for c in f)
+                    if re.search(r"(?:^|[\s(\uff08\[\u300c\u300e,\uff0c;\uff1b:\uff1a])" + flex + r"[\s,\uff0c]*$", raw):
+                        return True
         return False
     etal = w.endswith("ほか")
     if etal:
@@ -399,12 +410,14 @@ def auto_citations(text, refs, where):
         between = text[last_end:m.start()] if last_end is not None else None
         cands = by_year.get(year, [])
         hit = None
-        window = re.sub(r"[\s　]", "", text[max(0, m.start() - 60):m.start()])
-        window = re.sub(r"[（(]$", "", window)
+        raw_window = re.sub(r"[（(]\s*$", "", text[max(0, m.start() - 60):m.start()])
+        window = re.sub(r"[\s　]", "", raw_window)
+        window = re.sub(r"[,，]$", "", window)   # 「Takatsuki & Gorai, 1994」の読点
         if between is not None and re.fullmatch(r"\s*[,，]\s*", between) and last_window:
             window = last_window  # 「北川ほか2004, 2005」の 2005 は直前の著者表記を引き継ぐ
+            raw_window = last_window
         if hit is None:
-            ok = [r for r in cands if author_matches(window, r)]
+            ok = [r for r in cands if author_matches(window, r, raw_window)]
             if len(ok) == 1:
                 hit = ok[0]
             elif len(ok) > 1:
@@ -425,7 +438,7 @@ def auto_citations(text, refs, where):
             if not mm:
                 break
             y2 = m.group(1) + mm.group(2)
-            r2s = [r for r in by_year.get(y2, []) if author_matches(window, r)]
+            r2s = [r for r in by_year.get(y2, []) if author_matches(window, r, raw_window)]
             r2 = r2s[0] if len(r2s) == 1 else None
             if not r2:
                 break

@@ -70,11 +70,12 @@ layout:
   caption_pattern: '^(図|表|Fig\.|Table)\s*(\d+)'
 
 # 特別な扱いをする見出し
+# 節の見出しの文言．号によって言い方が違い，英文の論文もある (13(1):51 など) ので並びで書く
 sections:
-  abstract: [摘要, 要約]    # → <abstract xml:lang="ja"> (本文からは外す)
-  ack: 謝辞                 # → <back><ack>
-  refs: [引用文献, 文献]    # → <back><ref-list> (1990 年代の号は「文献」)
-  appendix: 付録            # → <back><app-group>
+  abstract: [摘要, 要約, ABSTRACT, Abstract]          # → <abstract> (本文からは外す)
+  ack: [謝辞, ACKNOWLEDGEMENT, ACKNOWLEDGEMENTS, Acknowledgement, Acknowledgements]
+  refs: [引用文献, 文献, REFERENCES, References]      # 1990 年代の和文は「文献」
+  appendix: [付録, APPENDIX, Appendix]
 
 # 引用文献の書式 (scripts/refs.py の規則を選ぶ)
 reference_style: author-year

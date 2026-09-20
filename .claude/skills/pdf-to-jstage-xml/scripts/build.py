@@ -121,7 +121,9 @@ def tag_ja_name(name):
 
 # イニシャルの点が落ちている原文もある (「Ishizuka, M & Sugawara, S. 1986.」．植生学会誌 14(2))．
 # 点の無いイニシャルは，後ろが区切り (& / and / , / 行末) のときだけ認める
-EN_NAME = re.compile(r"([^,&]+?),\s*((?:[A-Z][a-zà-ÿ]?\.\s?-?\s?)+|[A-Z][a-zà-ÿ]?(?=\s*(?:&|and\b|,|$)))")
+# 筆頭著者のカンマが落ちている原文もある (「Brown W. H. & Matthews, D. M. 1914.」．
+# 植生学会誌 15(1): 19)．カンマは無くてもよいことにする
+EN_NAME = re.compile(r"([^,&]+?),?\s*((?:[A-Z][a-zà-ÿ]?\.\s?-?\s?)+|(?<![A-Z])[A-Z](?=\s*(?:&|and\b|,|$)))")
 
 
 def tag_en_authors(auth):
@@ -129,6 +131,8 @@ def tag_en_authors(auth):
     out, pos, names = [], 0, []
     for m in EN_NAME.finditer(auth):
         sur = m.group(1).strip()
+        if not sur:
+            continue          # 姓が空になる当たり方 (区切り記号だけ) は人ではない
         lead = m.group(1)[: len(m.group(1)) - len(m.group(1).lstrip())]
         # 「Nakashizuka, T. and Numata, M.」の「and」は姓の一部ではないので，タグの外へ出す
         conj = re.match(r"^(and\s+|&\s*)(.+)$", sur, re.I)

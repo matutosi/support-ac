@@ -10,7 +10,7 @@
     out/manifest.json      ... zip に入れるものの対応表 (manifest.py)
     <記事識別子>.zip       ... 登載用の一式 (全文 XML 作成ツールの「インポート」か，編集登載の一括アップロードへ)
                                中は「資料コード/巻/号/記事識別子/」に XML・PDF・Graphics/
-    build_report.txt       ... リンクできなかった引用・図表など (手で確かめる箇所)
+    build_report.txt       ... リンクできなかった引用・図表など (AI が手で確かめる箇所)
 
 「資料コード/巻/号/記事識別子/」の入れ子は zip の中にだけ作り，ディスク上には作らない．
 PDF と図表の画像も写さず，元のファイルから直接 zip へ入れる (画像は zip の中で別紙2の名前に改名する)．
@@ -409,9 +409,9 @@ MANUAL = re.compile(r"\{\{([^|{}]+?)\s+((?:1[89]|20)\d{2}[a-z]?)\|([^{}]+)\}\}")
 
 
 def link_citations(text, refs, where):
-    """手で指定したリンク {{著者名の先頭 年|表示}} を先に処理し，残りを自動でリンクする．
+    """AI が手で指定したリンク {{著者名の先頭 年|表示}} を先に処理し，残りを自動でリンクする．
 
-    手で指定するのは，原文の表記揺れで自動では当たらないとき
+    AI が手で指定するのは，原文の表記揺れで自動では当たらないとき
     (例: 本文「北海道環境科学センター（2005）」と文献「北海道環境科学研究センター 2005」)．
     表示の文字は原文のまま残す (PDF と HTML の内容は同一でなければならないため)．
     """
@@ -424,7 +424,7 @@ def link_citations(text, refs, where):
         if len(hit) == 1:
             out.append(f"\x01{hit[0].id}\x02{m.group(3)}\x03")
         else:
-            REPORT.append(f"手で指定したリンクの文献が{'見つからない' if not hit else '複数ある'} ({where}): {m.group(0)}")
+            REPORT.append(f"AI が手で指定したリンクの文献が{'見つからない' if not hit else '複数ある'} ({where}): {m.group(0)}")
             out.append(m.group(3))
         pos = m.end()
     out.append(auto_citations(text[pos:], refs, where))

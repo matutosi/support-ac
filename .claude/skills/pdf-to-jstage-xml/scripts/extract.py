@@ -424,7 +424,7 @@ def main():
     ap.add_argument("--journal", default="vegsci")
     ap.add_argument("--out", required=True)
     ap.add_argument("--dpi-page", type=int, default=100)
-    ap.add_argument("--force", action="store_true", help="既にある body.md を上書きする (手で直した分は消える)")
+    ap.add_argument("--force", action="store_true", help="既にある body.md を上書きする (AI が手で直した分は消える)")
     ap.add_argument("--dpi-fig", type=int, default=300)
     args = ap.parse_args()
 
@@ -643,9 +643,9 @@ def main():
     md = [re.sub(r"@@CAP (\w+)@@", lambda m: captions.get(m.group(1), ""), l) for l in md]
     body_path = out / "body.md"
     if body_path.exists() and not args.force:
-        # 手で直した body.md (組んだ表など) を消さない
+        # AI が手で直した body.md (組んだ表など) を消さない
         body_path = out / "body.new.md"
-        print("body.md は既にあるので上書きしない (body.new.md に書いた．手で直した所を移してから置き換える)")
+        print("body.md は既にあるので上書きしない (body.new.md に書いた．AI が手で直した所を移してから置き換える)")
     body_path.write_text("\n".join(md), encoding="utf-8")
     (out / "floats.txt").write_text("\n".join(floats_txt), encoding="utf-8")
     (out / "page1.txt").write_text("\n".join(page1_txt), encoding="utf-8")

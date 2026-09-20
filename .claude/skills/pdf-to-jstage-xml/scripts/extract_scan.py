@@ -345,7 +345,7 @@ def main():
             page.get_pixmap(dpi=200, clip=pymupdf.Rect(30, 30, page.rect.width - 30,
                                                        page.rect.height - 36)).save(out / "tables" / name)
             REPORT.append(f"p{pno}: 90 度回した図表のページとみなした (OCR が読めていない)．"
-                          f"tables/{name} を見て，body.md に `@image` の枠を手で入れる")
+                          f"tables/{name} を見て，body.md に `@image` の枠を AI が手で入れる")
             for g in cols:
                 for r in g:
                     r["kind"] = "float"
@@ -427,7 +427,7 @@ def main():
                 name = f"{kind}{num}.png"
                 if clip.width < 10 or clip.height < 10:
                     # 枠がつぶれた (図題の位置から中身の範囲を決められなかった)．
-                    # 画像は作らず，ページ画像を見て crop.py で手で切り出す
+                    # 画像は作らず，ページ画像を見て AI が crop.py で手で切り出す
                     REPORT.append(f"p{pno}: {label} の枠がつぶれた {tuple(round(v) for v in clip)}．"
                                   f"pages/p{pno:03d}.png を見て crop.py で切り出し，tables/ か figs/ に置く")
                     continue

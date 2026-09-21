@@ -161,6 +161,38 @@ def tag_en_authors(auth):
     return "".join(out), names
 
 
+# 編者は「W. Holzner, M. J. A. Werger & I. Ikushima」のように名を先に書くことがある
+# (18(2):47 の B9)．姓が後ろに来るので EN_NAME (「姓, 名.」) では取れない
+GIVEN_FIRST = re.compile(r"^\s*(?P<given>(?:[A-Z]\s*\.\s*)+)"
+                         r"(?P<sur>[A-Z][A-Za-z'\u2019\-]+(?:\s+[A-Z][A-Za-z'\u2019\-]+)*)\s*$")
+
+
+def tag_en_names_given_first(s):
+    """「W. Holzner, M. J. A. Werger & I. Ikushima」の各人を string-name で囲む．
+
+    全員がこの形のときだけ使う (1人でも「姓, 名.」の形が混ざれば None を返して
+    tag_en_authors に任せる)．"""
+    parts = re.split(r"(\s*(?:[,，]|&|＆|\band\b)\s*)", s)
+    out, n = [], 0
+    for i, part in enumerate(parts):
+        if i % 2:                       # 区切りはそのまま
+            out.append(esc(part))
+            continue
+        if not part.strip():
+            out.append(esc(part))
+            continue
+        m = GIVEN_FIRST.match(part)
+        if not m:
+            return None, 0
+        lead = part[: len(part) - len(part.lstrip())]
+        given = m.group("given").rstrip()
+        out.append(esc(lead) + f'<string-name name-style="western" xml:lang="en">'
+                   f'<surname>{esc(m.group("sur"))}</surname>, '
+                   f'<given-names>{esc(given)}</given-names></string-name>')
+        n += 1
+    return ("".join(out), n) if n else (None, 0)
+
+
 # 年は「1996．」のほか，古い号では「1971-78．」「1979-80．」のような範囲で書かれることがある
 # 年のあとは「1965．」が普通だが，「今井　努 1965 西日本における…」のように点の無い号もある
 YEAR = re.compile(r"^(?P<auth>.+?)\s*[（(]?(?P<year>(?:1[89]|20)\d{2})(?P<suf>[a-z]?)"
@@ -343,7 +375,9 @@ class Ref:
                 pos = b
             eds_xml = "".join(parts) + esc(eds[pos:])
         else:
-            eds_xml, _ = tag_en_authors(eds)
+            eds_xml, _ = tag_en_names_given_first(eds)
+            if not eds_xml:
+                eds_xml, _ = tag_en_authors(eds)
             eds_xml = eds_xml or esc(eds)
         wrap = {
             "title": lambda t: self.title_xml(t),

@@ -489,6 +489,8 @@ def auto_citations(text, refs, where):
         cands = by_year.get(year, [])
         hit = None
         raw_window = re.sub(r"[（(]\s*$", "", text[max(0, m.start() - 60):m.start()])
+        # 斜体の印 (*et al*.) は表示の飾りなので，照合では外す
+        raw_window = raw_window.replace("*", "")
         window = re.sub(r"[\s　]", "", raw_window)
         window = re.sub(r"[,，]$", "", window)   # 「Takatsuki & Gorai, 1994」の読点
         if between is not None and re.fullmatch(r"\s*[,，]\s*", between) and last_window:

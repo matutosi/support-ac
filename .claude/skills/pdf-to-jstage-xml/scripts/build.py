@@ -597,6 +597,20 @@ def link_formulas(text, floats):
                   r"|Eqs?\s*\.?\s*[（(]?(\d+)[)）]?)", rep, text)
 
 
+def title_xml(text, floats):
+    """見出しの中の図表の参照だけをリンクにする (「(2) …群落（Table 1-(B)）…」の Table 1)．
+
+    見出しには群集名の命名者 (「Tohyama et Mochida 1978」) が入ることがあり，
+    これを引用と取り違えるので，引用 (著者 年) のリンクは行わない．
+    """
+    t = link_floats(text, floats)
+    t = link_appendix(t, floats)
+    s = inline(esc(t))
+    s = re.sub(r"\x04(F\d+)\x02(.*?)\x03", r'<xref ref-type="fig" rid="\1">\2</xref>', s)
+    s = re.sub(r"\x04(T\d+)\x02(.*?)\x03", r'<xref ref-type="table" rid="\1">\2</xref>', s)
+    return s
+
+
 def para_xml(text, refs, floats, where):
     t = link_citations(text, refs, where)
     t = link_floats(t, floats)
@@ -839,7 +853,7 @@ def build_body(blocks, refs, floats, work, names):
             while depth < level - 1:  # 見出しの段が飛んだとき
                 out.append("<sec>")
                 depth += 1
-            out.append(f"<sec><title>{inline(esc(b[2]))}</title>")
+            out.append(f"<sec><title>{title_xml(b[2], floats)}</title>")
             depth += 1
         elif b[0] == "p":
             out.append(f"<p>{para_xml(b[1], refs, floats, 'body')}</p>")

@@ -152,7 +152,10 @@ def tag_en_authors(auth):
         out.append(esc(auth[pos:m.start(1)]) + esc(lead))
         given = m.group(2).rstrip()
         trail = m.group(2)[len(given):]
-        out.append(f'<string-name name-style="western" xml:lang="en"><surname>{esc(sur)}</surname>, '
+        # 姓と名の間の区切りは原文のまま残す (「Braun-Blanquet J.」のようにカンマの無い原文がある．
+        # ここで「, 」を足すと，PDF と HTML の文字が変わってしまう)
+        sep = auth[m.start(1) + len(m.group(1).rstrip()):m.start(2)]
+        out.append(f'<string-name name-style="western" xml:lang="en"><surname>{esc(sur)}</surname>{esc(sep)}'
                    f'<given-names>{esc(given)}</given-names></string-name>{esc(trail)}')
         names.append(sur)
         pos = m.end()
@@ -548,6 +551,24 @@ def link_floats(text, floats):
                   r"((?:\s*(?:[，,、]|and|&|＆)\s*\d+(?![\d.]))*)", rep, text)
 
 
+APPENDIX_REF = re.compile(r"(Appendices|Appendix|付録)(\s*)(\d+)")
+
+
+def link_appendix(text, floats):
+    """「Appendix 1」「付録1」を，その番号の付録へのリンクにする．
+
+    図表と違って番号の言い方が「Appendix 1」なので，枠の番号 (`:::table T3 Appendix 1`) と
+    突き合わせて行き先を決める．該当する枠が無ければ，そのままの文字で残す．
+    """
+    def rep(m):
+        key = (m.group(1) + m.group(3)).replace(" ", "").lower().replace("appendices", "appendix")
+        for fid, label in floats.items():
+            if (label or "").replace(" ", "").lower() == key:
+                return f"\x04{fid}\x02{m.group(0)}\x03"
+        return m.group(0)
+    return APPENDIX_REF.sub(rep, text)
+
+
 SEC_NUM = re.compile(r"^[\s\u3000]*(?:[0-9０-９]+|[IVXivx]+)[\s\u3000]*[．.、，,:：]?[\s\u3000]*")
 
 
@@ -578,6 +599,7 @@ def link_formulas(text, floats):
 def para_xml(text, refs, floats, where):
     t = link_citations(text, refs, where)
     t = link_floats(t, floats)
+    t = link_appendix(t, floats)
     t = link_formulas(t, floats)
     s = inline(esc(t))
     s = re.sub(r"\x01(B\d+)\x02(.*?)\x03", r'<xref ref-type="bibr" rid="\1">\2</xref>', s)
@@ -687,7 +709,7 @@ def main():
             main_blocks.append(b)
 
     refs = [Ref(i + 1, t) for i, t in enumerate(ref_lines)]
-    floats = {b[1] for b in main_blocks if b[0] in ("fig", "table", "formula")}
+    floats = {b[1]: b[2] for b in main_blocks if b[0] in ("fig", "table", "formula")}
     # 記事識別子は J-STAGE の既存のもの (meta.yaml の article_id) を使う．無ければ「巻_開始ページ」
     art_id = check_article_id(meta)
     out_dir = work / manifest.OUT

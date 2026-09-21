@@ -245,6 +245,9 @@ JOURNAL_TAIL = re.compile(
     # ページは「14：p.151．」のように p. が付くこともある (1ページだけの記事)
     r"\s*[:：]\s*(?:p\s*\.\s*)?(?P<fp>[A-Za-z]?\d+)"
     r"(?:\s*[-–−₋~〜～]\s*(?P<lp>[A-Za-z]?\d+))?"
+    # 分載の論文は「9：1-37, 108-127, 195-219, 271-300．」のようにページ範囲を並べる
+    # (18(2):107 の B3)．2つめ以降は文字のまま置く (fpage・lpage は先頭の範囲)
+    r"(?:\s*[,，]\s*\d+\s*[-–−₋~〜～]\s*\d+)*"
     # 「1-10, pls. 1-4.」のように図版の付記が続くことがある (植生学会誌 13(2) の B3)
     r"(?:\s*[,，]\s*(?:pls?|figs?)\s*\.?\s*[\dA-Za-z,\s\-–−]*)?"
     r"(?:\s*[+＋]\s*[^.．]*)?"
@@ -292,8 +295,15 @@ def ja3(rest):
     「大町市史，Vol. 1, pp. 655-663.」のように書名の中に句点があると，
     書名の切れ端 (「1」) だけが残る形で当たってしまう (16(1):115 の B80)．"""
     m = CHAPTER_JA3.match(rest)
-    if m and (not m.group("src").strip() or re.fullmatch(r"[\dA-Za-z\s　,，]+", m.group("src"))):
+    if not m:
         return None
+    if not m.group("src").strip() or re.fullmatch(r"[\dA-Za-z\s　,，]+", m.group("src")):
+        return None
+    # 出版社・所在地がページの範囲になる当たり方も採らない．分載の論文
+    # (「地理学評論，9：1-37, 108-127, 195-219, 271-300．」) は雑誌 (18(2):107 の B3)
+    for g in ("pub", "loc"):
+        if m.group(g) and NOT_PUB.search(m.group(g).strip()):
+            return None
     return m
 
 

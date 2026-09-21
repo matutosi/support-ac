@@ -568,7 +568,9 @@ def link_floats(text, floats):
         return out
     return re.sub(r"(図|表|Figs\.|Fig\.|Figures|Figure|Figs|Fig"
                   r"|Tables|Table|Tabs\.|Tab\.)(\s*)(\d+)"
-                  r"((?:\s*(?:[，,、]|and|&|＆)\s*\d+(?![\d.]))*)", rep, text)
+                  # 「Fig. 4, 1a」の「1a」のように英字が続くものは番号の続きではない
+                  # (Fig. 4 の中の群落 1 の下位単位 a を指す．17(2):55)
+                  r"((?:\s*(?:[，,、]|and|&|＆)\s*\d+(?![\d.A-Za-z]))*)", rep, text)
 
 
 SEC_NUM = re.compile(r"^[\s\u3000]*(?:[0-9０-９]+|[IVXivx]+)[\s\u3000]*[．.、，,:：]?[\s\u3000]*")

@@ -201,6 +201,11 @@ JOURNAL_TAIL = re.compile(
     # ページのあとに句点を置いてから括弧が来ることもある (17(2):81)
     r"(?:\s*[.．]?\s*[（(][^)）]*[)）]?)?"
     r"\s*[.．]?\s*$")     # 「371-486+30 plates.」のような後ろ付きも雑誌として扱う
+# 編者を書名のあとに括弧で置く書き方もある
+# (「In: 書名．副題．(ed. H. Dierschke), pp. 21-39. J. Cramer, Vaduz.」．17(1):1・17(1):31)
+CHAPTER_EN2 = re.compile(
+    r"^(?P<title>.+?\.)\s*(?:In:\s*)?(?P<src>.+?)\s*[（(]\s*eds?\.?(?:\s+by)?\s+(?P<eds>[^)）]*)[)）]"
+    r"\s*[,，]?\s*(?:pp?\s*\.\s*)?(?P<fp>\d+)\s*[-–]\s*(?P<lp>\d+)\s*[.．]\s*(?P<pub>.+)$")
 CHAPTER_JA = re.compile(
     r"^(?P<title>.+?[.．])\s*(?P<eds>[^「」．.]+?)編「(?P<src>[^」]+)」\s*[,，]\s*(?P<fp>\d+)(?:\s*[-–]\s*(?P<lp>\d+))?"
     r"\s*[.．]\s*(?P<pub>[^,，．.]+?)\s*[,，]\s*(?P<loc>[^.．]+?)\s*[.．]\s*$")
@@ -267,7 +272,9 @@ class Ref:
         rest = m.group("rest")
         jm = JOURNAL_TAIL.search(rest)
         bm = BOOK_TAIL.search(rest)
-        cm = (CHAPTER_JA.match(rest) or CHAPTER_JA2.match(rest)) if self.lang == "ja" else CHAPTER_EN.match(rest)
+        cm = ((CHAPTER_JA.match(rest) or CHAPTER_JA2.match(rest)) if self.lang == "ja"
+              # 編者を括弧で後置する形を先に見る (CHAPTER_EN だと編者と書名が入れ替わるため)
+              else (CHAPTER_EN2.match(rest) or CHAPTER_EN.match(rest)))
         if cm:
             self.kind = "book"
             body = self.chapter_xml(rest, cm)

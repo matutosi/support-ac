@@ -352,6 +352,12 @@ CHAPTER_EN2_IN = re.compile(CHAPTER_EN2.pattern.replace(r"(?:In\s*:\s*)?", r"In\
 CHAPTER_EN_IN = re.compile(CHAPTER_EN.pattern.replace(r"(?:In\s*:\s*)?", r"In\s*:\s*"))
 # 編者を書かない英文の報告書の章 (「章題. In : 報告書名, pp. 37-48. 発行者 (in Japanese).」．
 # 19(1):1 の B16・B39)．和文の CHAPTER_JA3 と同じ形で，前に「In :」が付く
+# 発行者・発行地のあとにページを置く章もある
+# (「章題. In : 書名 (ed. A. Miyawaki), 発行者. 東京. pp. 55-60 (付記).」．19(1):11 の B9・B15)
+CHAPTER_EN4 = re.compile(
+    r"^(?P<title>.+?[.．])\s*In\s*:?\s*(?P<src>.+?)\s*[（(]\s*[Ee]ds?\.?(?:\s+by)?\s+"
+    r"(?P<eds>[^)）]*)[)）]\s*[,，.．]?\s*(?P<pub>.+?)\s*[.．]\s*(?P<loc>[^.．,，]+?)\s*[.．]\s*"
+    r"pp?\s*[.．]\s*(?P<fp>\d+)\s*[-–−]\s*(?P<lp>\d+)\s*(?:[（(][^)）]*[)）])?\s*[.．]?\s*$")
 CHAPTER_EN3 = re.compile(
     r"^(?P<title>.+?[.．])\s*In\s*:\s*(?P<src>.+?)\s*[,，]\s*(?:pp?\s*[.．]\s*)?"
     r"(?P<fp>\d+)\s*[-–−]\s*(?P<lp>\d+)\s*[.．]\s*"
@@ -421,7 +427,7 @@ class Ref:
               # 編者を括弧で後置する形を先に見る (CHAPTER_EN だと編者と書名が入れ替わるため)
               else (CHAPTER_EN2_IN.match(rest) or CHAPTER_EN_IN.match(rest)
                     or CHAPTER_EN2.match(rest) or CHAPTER_EN.match(rest)
-                    or CHAPTER_EN3.match(rest)))
+                    or CHAPTER_EN3.match(rest) or CHAPTER_EN4.match(rest)))
         if cm:
             self.kind = "book"
             body = self.chapter_xml(rest, cm)

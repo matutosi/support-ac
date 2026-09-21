@@ -366,7 +366,10 @@ NOT_PUB = re.compile(r"(報告書|調査|目録|一覧|紀要|年報)$|[）)]$"
 # (19(1):1 の B32)．略記の点は出版社の一部なので，そこだけ点を許す
 BOOK_TAIL = re.compile(r"\s*(?P<pub>[^.．,，「」\s][^.．,，「」]*?"
                        r"(?:\s*(?:Inc|Ltd|Co|Corp|Univ|Press|Publ|Pub)[.．])?)"
-                       r"\s*[,，]\s*(?P<loc>[^.．,，「」]+?)\s*[.．]\s*$")
+                       # 発行地は「Washington, D.C.」のように略記が続くことがある
+                       # (19(2):73 の B3)．D.C. の点で切ると出版社と発行地が割れる
+                       r"\s*[,，]\s*(?P<loc>[^.．,，「」]+?"
+                       r"(?:\s*[,，]\s*[A-Z][.．]\s*(?:[A-Z][.．])?)?)\s*[.．]?\s*$")
 
 
 class Ref:
@@ -428,12 +431,17 @@ class Ref:
         # 出版社の候補に閉じ括弧だけが入るのは切れ目の取り違え
         # (「…（付着色植生図　4，付表），横浜．」．植生学会誌 14(2) の B6)
         elif (bm and not re.search(r"(In\s*:|編「|（編）|pp\.)", rest)
+              # 発行地の位置に数字だけが来るのは，ページを発行地と取り違えた形
+              # (「…第106回日本林学会講演要旨集, 540」．18(2):75 の B24)
+              and not re.fullmatch(r"[\d\s　]+|[\dA-Za-z]*[\s　]*\d+[\s　]*[-–−~〜～][\s　]*\d+",
+                                  bm.group("loc").strip())
               and bm.group("pub").count("）") <= bm.group("pub").count("（")
               and bm.group("pub").count(")") <= bm.group("pub").count("(")):
             self.kind = "book"
             title = rest[:bm.start("pub")]
             t2 = title.rstrip()
-            end = re.search(r"[.．]\s*$", t2)
+            # 書名のあとが読点の書き方もある (「Saline Agriculture, National Academy Press, …」)
+            end = re.search(r"[.．,，]\s*$", t2)
             main = t2[: end.start()] if end else t2
             # タグで囲まない部分にも *斜体* の印が残ることがあるので inline を通す
             body = (f'<source xml:lang="{self.lang}">{inline(esc(main.strip()))}</source>'

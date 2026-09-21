@@ -169,8 +169,8 @@ def main():
     for d in am.iter("date"):
         o.append(f"- {d.get('date-type')}: {d.findtext('year')}-{d.findtext('month')}-{d.findtext('day')}")
     for kg in am.iter("kwd-group"):
-        # キーワードに <italic> が入ると .text が空になるので，中の字をすべてつなぐ
-        o.append(f"- キーワード ({lang(kg)}): " + ", ".join("".join(k.itertext()) for k in kg.iter("kwd")))
+        # 斜体の印も出す．字だけ並べると，検証役が学名の斜体を確かめられない (17(2):73)
+        o.append(f"- キーワード ({lang(kg)}): " + ", ".join(inline(k, refs) for k in kg.iter("kwd")))
     for cs in am.iter("copyright-statement"):
         o.append(f"- 著作権 ({lang(cs)}): {''.join(cs.itertext())}")
     for tag in ("abstract", "trans-abstract"):

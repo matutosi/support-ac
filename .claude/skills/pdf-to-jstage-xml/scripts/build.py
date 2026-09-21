@@ -223,6 +223,12 @@ CHAPTER_JA2 = re.compile(
     r"(?:\s*[-–]\s*(?P<lp>\d+))?\s*[.．]\s*(?P<pub>[^,，．.]+?)\s*[,，]\s*(?P<loc>[^.．]+?)\s*[.．]\s*$")
 # 「In:」を書かない号もある (「章題. 編者 (eds.) 書名, pp. 243-272. 出版社, 所在地.」．17(2):97)．
 # ページに pp. が付くこともある
+# 「In:」も「」も使わない和文の編著の章
+# (「章題．書名（編者編），pp.33-94．出版社．」．18(1):23 の B7，18(1):39 の B1・B5・B10・B17)
+CHAPTER_JA3 = re.compile(
+    r"^(?P<title>.+?[.．])\s*(?P<src>[^.．]+?)\s*[（(](?P<eds>[^）)]+?)\s*(?:編著|編|監修)[）)]"
+    r"\s*[,，]\s*(?:pp?\s*[.．]\s*)?(?P<fp>\d+)\s*[-–−]\s*(?P<lp>\d+)\s*[.．]\s*"
+    r"(?P<pub>[^,，.．]+?)(?:\s*[,，]\s*(?P<loc>[^,，.．]+?))?\s*[.．]?\s*$")
 CHAPTER_EN = re.compile(
     r"^(?P<title>.+?\.)\s*(?:In:\s*)?(?P<eds>.+?)\s*\(?eds?\.\)?\s*(?P<src>.+?),\s*(?:pp?\s*\.\s*)?"
     r"(?P<fp>\d+)\s*[-–]\s*(?P<lp>\d+)\.\s*(?P<pub>.+)$")
@@ -277,7 +283,8 @@ class Ref:
         rest = m.group("rest")
         jm = JOURNAL_TAIL.search(rest)
         bm = BOOK_TAIL.search(rest)
-        cm = ((CHAPTER_JA.match(rest) or CHAPTER_JA2.match(rest)) if self.lang == "ja"
+        cm = ((CHAPTER_JA.match(rest) or CHAPTER_JA2.match(rest) or CHAPTER_JA3.match(rest))
+              if self.lang == "ja"
               # 編者を括弧で後置する形を先に見る (CHAPTER_EN だと編者と書名が入れ替わるため)
               else (CHAPTER_EN2.match(rest) or CHAPTER_EN.match(rest)))
         if cm:

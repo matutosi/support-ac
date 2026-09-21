@@ -479,7 +479,7 @@ def auto_citations(text, refs, where):
     for r in refs:
         if r.year:
             by_year.setdefault(r.year, []).append(r)
-    out, pos, last_end, last_window = [], 0, None, None
+    out, pos, last_end, last_window, last_raw = [], 0, None, None, None
     for m in CITE_YEAR.finditer(text):
         after = text[m.end():m.end() + 3]
         if re.match(r"\s*[)）]?\s*年", after) or re.match(r"\s*[/.]\d", after):  # 「2011 年」「平成4（1992）年」
@@ -495,7 +495,7 @@ def auto_citations(text, refs, where):
         window = re.sub(r"[,，]$", "", window)   # 「Takatsuki & Gorai, 1994」の読点
         if between is not None and re.fullmatch(r"\s*[,，]\s*", between) and last_window:
             window = last_window  # 「北川ほか2004, 2005」の 2005 は直前の著者表記を引き継ぐ
-            raw_window = last_window
+            raw_window = last_raw  # 空白を残したほうも引き継ぐ (「Li (1989, 1993)」の 1993)
         if hit is None:
             ok = [r for r in cands if author_matches(window, r, raw_window)]
             if len(ok) == 1:
@@ -511,7 +511,7 @@ def auto_citations(text, refs, where):
         out.append(text[pos:m.start()])
         out.append(f"\x01{hit.id}\x02{m.group(0)}\x03")
         pos = m.end()
-        last_end, last_window = m.end(), window
+        last_end, last_window, last_raw = m.end(), window, raw_window
         # 「1991a, b」の b
         while True:
             mm = re.match(r"(\s*[,，]\s*)([a-z])(?![A-Za-z])", text[pos:])

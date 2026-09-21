@@ -242,9 +242,10 @@ JOURNAL_TAIL = re.compile(
     r"|[^.．\s][^.．]*?)(?:\s*[.．,，]\s*|\s+)"
     # 巻は「52-53」のような範囲や，「Suppl. 1」のような別冊の言い方もある．
     # 巻を立てず号だけの雑誌もある (「フロラ栃木，(3)：1-10」．植生学会誌 13(2) の B3)
-    r"(?:(?P<vol>(?:Suppl\.?\s*|Spec\.?\s*)?[A-Za-z]?\d+(?:\s*[-–−]\s*\d+)?[A-Za-z]?)"
+    # 紙面が巻を太字で組む雑誌があり，body.md も原文どおり **75** と書く (19(1):25 の B11)
+    r"(?:\*{0,2}(?P<vol>(?:Suppl\.?\s*|Spec\.?\s*)?[A-Za-z]?\d+(?:\s*[-–−]\s*\d+)?[A-Za-z]?)"
     # 巻と号をハイフンでつなぐ書き方もある (「土木技術資料, 41-(7)：32-37」．18(1):1 の B5)
-    r"(?:\s*[-–−]?\s*[（(](?P<iss>[^)）]+)[)）])?|[（(](?P<iss2>[^)）]+)[)）])"
+    r"\*{0,2}(?:\s*[-–−]?\s*[（(](?P<iss>[^)）]+)[)）])?|[（(](?P<iss2>[^)）]+)[)）])"
     # ページは「14：p.151．」のように p. が付くこともある (1ページだけの記事)
     r"\s*[:：]\s*(?:p\s*\.\s*)?(?P<fp>[A-Za-z]?\d+)"
     r"(?:\s*[-–−₋~〜～]\s*(?P<lp>[A-Za-z]?\d+))?"
@@ -460,8 +461,14 @@ class Ref:
         s = f'<source xml:lang="{self.lang}">{inline(esc(m.group("src").strip()))}</source>'
         iss = "iss" if m.group("iss") else ("iss2" if m.group("iss2") else None)
         if m.group("vol"):
-            s += esc(rest[m.end("src"):m.start("vol")]) + f"<volume>{g('vol')}</volume>"
+            pre = rest[m.end("src"):m.start("vol")]
             pos = m.end("vol")
+            bold = pre.endswith("**") and rest[pos:pos + 2] == "**"
+            if bold:                # 巻を太字で組む雑誌 (19(1):25)．太字のまま <volume> に入れる
+                pre, pos = pre[:-2], pos + 2
+                s += esc(pre) + f"<volume><bold>{g('vol')}</bold></volume>"
+            else:
+                s += esc(pre) + f"<volume>{g('vol')}</volume>"
         else:                       # 巻が無く号だけの雑誌
             pos = m.end("src")
         if iss:

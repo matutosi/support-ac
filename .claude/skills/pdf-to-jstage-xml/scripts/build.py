@@ -133,7 +133,8 @@ def tag_ja_name(name):
 # イニシャルの前に空白が入る原文もある (「Krummel, J .P.」．16(2):103 の B16)
 # 筆頭著者のカンマが落ちている原文もある (「Brown W. H. & Matthews, D. M. 1914.」．15(1):19)．
 # 点の無いイニシャルは大文字1字に限る (「Chapin III, F.S.」が割れるのを防ぐ)
-EN_NAME = re.compile(r"([^,&]+?),?\s*((?:[A-Z][a-zà-ÿ]?\s?\.\s?-?\s?)+|(?<![A-Z])[A-Z](?=\s*(?:&|and\b|,|$)))")
+# 「Fang, J-Y.」「Wang, C-W.」のようにイニシャルが引き合わせてある原文もある
+EN_NAME = re.compile(r"([^,&]+?),?\s*((?:[A-Z][a-zà-ÿ]?(?:\s?-\s?[A-Z][a-zà-ÿ]?)?\s?\.\s?-?\s?)+|(?<![A-Z])[A-Z](?=\s*(?:&|and|,|$)))")
 
 
 def tag_en_authors(auth):

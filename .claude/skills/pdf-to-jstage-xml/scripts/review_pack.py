@@ -195,9 +195,11 @@ def main():
                     o.append("- " + inline(it.find("p"), refs))
                 o.append("")
             elif c.tag == "fig":
-                g = c.find("graphic")
                 o.append(f"**[図 {c.get('id')}] {c.findtext('label')}** {inline(c.find('caption/p'), refs)}")
-                o.append(f"  画像: `{img(g.get(XLINK))}`")
+                # 2枚組の図 (「a.」「b.」) は画像が2枚ある．1枚目しか出さないと
+                # 検証役が「半分しか載っていない」と誤解する (19(2):95 の Fig. 8)
+                for g in c.findall("graphic"):
+                    o.append(f"  画像: `{img(g.get(XLINK))}`")
                 o.append("")
             elif c.tag == "disp-formula":
                 o.append(f"**[式 {c.get('id')}] {c.findtext('label') or '(番号なし)'}**")

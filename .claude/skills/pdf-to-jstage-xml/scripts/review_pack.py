@@ -191,8 +191,11 @@ def main():
                 o.append(inline(c, refs))
                 o.append("")
             elif c.tag == "list":
-                for it in c.iter("list-item"):
-                    o.append("- " + inline(it.find("p"), refs))
+                # 番号つきの箇条書き (list-type="order") は番号で出す
+                # (検証役が「番号が落ちている」と誤解しないため)
+                ordered = c.get("list-type") == "order"
+                for k, it in enumerate(c.iter("list-item"), 1):
+                    o.append((f"{k}. " if ordered else "- ") + inline(it.find("p"), refs))
                 o.append("")
             elif c.tag == "fig":
                 g = c.find("graphic")

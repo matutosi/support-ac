@@ -320,13 +320,27 @@ def ja3(rest):
 CHAPTER_EN = re.compile(
     r"^(?P<title>.+?\.)\s*(?:In\s*:\s*)?(?P<eds>.+?)\s*\(?eds?\.\)?\s*(?P<src>.+?),\s*(?:pp?\s*\.\s*)?"
     r"(?P<fp>\d+)\s*[-–]\s*(?P<lp>\d+)\.\s*(?P<pub>.+)$")
+# 「In :」を必ず見る形．章題の中に「Mt.」「No.」のような略記があると，
+# 「In :」が任意だと略記の点を章題の終わりと取り違える (「Mt. Horai. In : …」．19(1):1 の B22)
+CHAPTER_EN2_IN = re.compile(CHAPTER_EN2.pattern.replace(r"(?:In\s*:\s*)?", r"In\s*:\s*"))
+CHAPTER_EN_IN = re.compile(CHAPTER_EN.pattern.replace(r"(?:In\s*:\s*)?", r"In\s*:\s*"))
+# 編者を書かない英文の報告書の章 (「章題. In : 報告書名, pp. 37-48. 発行者 (in Japanese).」．
+# 19(1):1 の B16・B39)．和文の CHAPTER_JA3 と同じ形で，前に「In :」が付く
+CHAPTER_EN3 = re.compile(
+    r"^(?P<title>.+?[.．])\s*In\s*:\s*(?P<src>.+?)\s*[,，]\s*(?:pp?\s*[.．]\s*)?"
+    r"(?P<fp>\d+)\s*[-–−]\s*(?P<lp>\d+)\s*[.．]\s*"
+    r"(?P<pub>[^.．].*?)\s*[.．]?\s*(?:[（(][^)）]*[)）])?\s*[.．]?\s*$")
 # 題名．出版社．(所在地なし)．ただし「…報告書（追加調査）．」のような副題は出版社ではない
 BOOK_PUB = re.compile(r"[.．]\s*(?P<pub>[^.．,，「」]+?)\s*[.．]\s*$")
 # 出版社の候補が数字やページの範囲だけのものは出版社ではない
 # (「…特定植物群落調査報告書，pp．21−22．」の 21−22．17(1):23 の B7)
 NOT_PUB = re.compile(r"(報告書|調査|目録|一覧|紀要|年報)$|[）)]$"
                      r"|^[\dA-Za-z]*[\s　]*[\d]+[\s　]*[-–−~〜～][\s　]*\d+$|^[\d\s　]+$")
-BOOK_TAIL = re.compile(r"\s*(?P<pub>[^.．,，「」\s][^.．,，「」]*?)\s*[,，]\s*(?P<loc>[^.．,，「」]+?)\s*[.．]\s*$")
+# 出版社は「SPSS Inc., Chicago.」「… Co., Ltd., Tokyo.」のように略記で終わることがある
+# (19(1):1 の B32)．略記の点は出版社の一部なので，そこだけ点を許す
+BOOK_TAIL = re.compile(r"\s*(?P<pub>[^.．,，「」\s][^.．,，「」]*?"
+                       r"(?:\s*(?:Inc|Ltd|Co|Corp|Univ|Press|Publ|Pub)[.．])?)"
+                       r"\s*[,，]\s*(?P<loc>[^.．,，「」]+?)\s*[.．]\s*$")
 
 
 class Ref:
@@ -374,7 +388,9 @@ class Ref:
         cm = ((CHAPTER_JA.match(rest) or CHAPTER_JA2.match(rest) or ja3(rest))
               if self.lang == "ja"
               # 編者を括弧で後置する形を先に見る (CHAPTER_EN だと編者と書名が入れ替わるため)
-              else (CHAPTER_EN2.match(rest) or CHAPTER_EN.match(rest)))
+              else (CHAPTER_EN2_IN.match(rest) or CHAPTER_EN_IN.match(rest)
+                    or CHAPTER_EN2.match(rest) or CHAPTER_EN.match(rest)
+                    or CHAPTER_EN3.match(rest)))
         if cm:
             self.kind = "book"
             body = self.chapter_xml(rest, cm)

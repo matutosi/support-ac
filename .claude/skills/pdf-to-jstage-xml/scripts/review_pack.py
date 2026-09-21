@@ -220,7 +220,7 @@ def main():
         o += ["## 謝辞", ""] + [inline(p, refs) for p in back.find("ack").iter("p")] + [""]
     # 見出しは XML の <ref-list><title> をそのまま出す．固定の「引用文献」だと，
     # 紙面が「References」の論文で検証役が「見出しが違う」と誤解する (18(1):31)
-    rl = root.find(".//ref-list")
+    rl = r.find(".//ref-list")
     rt = (rl.findtext("title") if rl is not None else None) or "引用文献"
     o += [f"## {rt} (元の文と，分解した結果)", ""]
     for ref in back.iter("ref"):

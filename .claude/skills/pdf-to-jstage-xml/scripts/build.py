@@ -923,12 +923,64 @@ def compare_web_refs(work, refs):
     norm = lambda t: re.sub(r"[\s　．.，,]", "", unicodedata.normalize("NFKC", t))
     if len(web) != len(pdf):
         REPORT.append(f"引用文献の件数がウェブ版と違う: PDF {len(pdf)} 件 / ウェブ {len(web)} 件．並びもずれている恐れがある")
+    # 旧号ではウェブ版と PDF で並びが全く違うことがある (19(2):113 では 36 件すべてが
+    # 添字のずれで「違う」と出ていた)．著者の先頭と年で組にしてから比べる
+    def key(t):
+        # ウェブ版は「1) BRADFIELD G. E. 題名. 誌名. (1984) vol.55, p.105-114.」の形で，
+        # 通し番号が付き，姓が総大文字で，年の位置も違う．番号を外し，大文字小文字も揃える
+        n = re.sub(r"^\d+[)）]", "", norm(t)).casefold()
+        y = re.search(r"(1[89]|20)\d{2}", n)
+        return (n[:5], y.group(0) if y else "")
+    rest = list(range(len(web)))
+    pair = {}
+    for i, p in enumerate(pdf):                 # まず著者の先頭と年が合うものを組にする
+        for j in list(rest):
+            if key(web[j]) == key(p):
+                pair[i] = j
+                rest.remove(j)
+                break
+    for i in range(len(pdf)):                   # 組にならなかったものは，残りを順に当てる
+        if i not in pair and rest:
+            pair[i] = rest.pop(0)
+    # ウェブ版が「1) 著者. 題名. 誌名. (1984) vol.55, p.105-114.」のように
+    # 項目ごとに組み直されている号がある (旧号のほとんど)．そのときは並びも書き方も違う
+    structured = sum(bool(re.match(r"^\d+[)）]", l)) for l in web) > len(web) / 2
+
+    from collections import Counter
+
+    def words(t):
+        n = unicodedata.normalize("NFKC", t).casefold()
+        n = re.sub(r"^\s*\d+[)）]", "", n)             # ウェブ版の通し番号
+        n = re.sub(r"(?:doi|https?)\S*", "", n)        # ウェブ版だけが持つ DOI・URL
+        c = Counter(re.findall(r"[a-z]+|\d+|[^\x00-\x7f\W\d_]", n))
+        for w in ("vol", "p", "pp", "no", "in", "and"):  # 組み方の違いで出入りする語
+            c.pop(w, None)
+        for w in [w for w in c if len(w) == 1 and w.isascii()]:
+            c.pop(w)                                  # イニシャル (ウェブ版は落とすことがある)
+        return c
+
     content, form = 0, 0
-    for k, (w, p) in enumerate(zip(web, pdf)):
+    for k in range(len(pdf)):
+        if k not in pair:
+            continue
+        w, p = web[pair[k]], pdf[k]
         if w == p:
             continue
         if norm(w) == norm(p):
             form += 1
+            continue
+        if structured:
+            # ウェブ版が項目ごとに組み直された形のときは，字の並びで比べても意味が無い
+            # (年や巻の位置が違う)．語の多重集合で比べ，片方にしかない語だけを出す
+            miss = words(w) - words(p)
+            extra = words(p) - words(w)
+            if not miss and not extra:
+                form += 1
+                continue
+            content += 1
+            REPORT.append(f"引用文献がウェブ版と違う: B{k + 1} "
+                          + (f"ウェブにだけある語「{'・'.join(sorted(miss)[:5])}」" if miss else "")
+                          + (f" PDF にだけある語「{'・'.join(sorted(extra)[:5])}」" if extra else ""))
             continue
         content += 1
         a, b = norm(w), norm(p)

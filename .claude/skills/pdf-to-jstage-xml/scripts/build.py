@@ -145,8 +145,11 @@ NAME_NO_COMMA = re.compile(r"(?P<sur>[A-Z][A-Za-z'\u2019\-]+)[ 　]"
 
 
 def tag_gap(seg):
-    """著者の間の区切りの中に「Li Y.」があればタグを付ける (無ければそのまま)．"""
-    out, pos, n = [], 0, 0
+    """「Li Y.」のように姓のあとの読点を落とした名前にタグを付ける (無ければそのまま)．
+
+    姓のあとに読点を打たない書式の雑誌もあり，その号では著者が1人も分かれない
+    (「Glaser P.H., Janssens J.A. & Siegel D.I.」．19(2):95 の B11)．"""
+    out, pos, names = [], 0, []
     for m in NAME_NO_COMMA.finditer(seg):
         given = m.group("given").rstrip()
         out.append(esc(seg[pos:m.start()]) +
@@ -154,8 +157,9 @@ def tag_gap(seg):
                    f'<surname>{esc(m.group("sur"))}</surname> '
                    f'<given-names>{esc(given)}</given-names></string-name>' +
                    esc(m.group("given")[len(given):]))
-        pos, n = m.end(), n + 1
-    return ("".join(out) + esc(seg[pos:]), n)
+        pos = m.end()
+        names.append(m.group("sur"))
+    return ("".join(out) + esc(seg[pos:]), names)
 
 
 def tag_en_authors(auth):
@@ -170,8 +174,7 @@ def tag_en_authors(auth):
             lead += conj.group(1)
             sur = conj.group(2)
         gap, gn = tag_gap(auth[pos:m.start(1)])
-        if gn:
-            names.append("")            # 名前の数だけ数える (先頭の姓は使わない)
+        names += gn
         out.append(gap + esc(lead))
         given = m.group(2).rstrip()
         trail = m.group(2)[len(given):]
@@ -191,7 +194,9 @@ def tag_en_authors(auth):
                    f'<given-names>{esc(tail.group("given"))}</given-names></string-name>')
         names.append(tail.group("sur"))
     else:
-        out.append(esc(auth[pos:]))
+        tail_xml, tail_names = tag_gap(auth[pos:])   # 末尾にも読点なしの名前が来る
+        out.append(tail_xml)
+        names += tail_names
     if not names:
         return None, []
     return "".join(out), names

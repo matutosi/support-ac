@@ -198,9 +198,12 @@ def tag_en_names_given_first(s):
             return None, 0
         lead = part[: len(part) - len(part.lstrip())]
         given = m.group("given").rstrip()
+        gap = m.group("given")[len(given):]      # 名と姓の間の空き (原文のまま残す)
+        # 原文が「名 姓」の順なので，タグもその順に置く (姓を前に出すと
+        # 表示される文字が変わり，PDF と HTML の内容が違ってしまう．19(1):55 の B20)
         out.append(esc(lead) + f'<string-name name-style="western" xml:lang="en">'
-                   f'<surname>{esc(m.group("sur"))}</surname>, '
-                   f'<given-names>{esc(given)}</given-names></string-name>')
+                   f'<given-names>{esc(given)}</given-names>{esc(gap)}'
+                   f'<surname>{esc(m.group("sur"))}</surname></string-name>')
         n += 1
     return ("".join(out), n) if n else (None, 0)
 
@@ -264,7 +267,7 @@ JOURNAL_TAIL = re.compile(
 # 編者を書名のあとに括弧で置く書き方もある
 # (「In: 書名．副題．(ed. H. Dierschke), pp. 21-39. J. Cramer, Vaduz.」．17(1):1・17(1):31)
 CHAPTER_EN2 = re.compile(
-    r"^(?P<title>.+?\.)\s*(?:In:\s*)?(?P<src>.+?)\s*[（(]\s*eds?\.?(?:\s+by)?\s+(?P<eds>[^)）]*)[)）]"
+    r"^(?P<title>.+?\.)\s*(?:In\s*:\s*)?(?P<src>.+?)\s*[（(]\s*eds?\.?(?:\s+by)?\s+(?P<eds>[^)）]*)[)）]"
     r"\s*[,，]?\s*(?:pp?\s*\.\s*)?(?P<fp>\d+)\s*[-–]\s*(?P<lp>\d+)\s*[.．]\s*(?P<pub>.+)$")
 CHAPTER_JA = re.compile(
     r"^(?P<title>.+?[.．])\s*(?P<eds>[^「」．.]+?)編「(?P<src>[^」]+)」\s*[,，]\s*(?P<fp>\d+)(?:\s*[-–]\s*(?P<lp>\d+))?"
@@ -308,7 +311,7 @@ def ja3(rest):
 
 
 CHAPTER_EN = re.compile(
-    r"^(?P<title>.+?\.)\s*(?:In:\s*)?(?P<eds>.+?)\s*\(?eds?\.\)?\s*(?P<src>.+?),\s*(?:pp?\s*\.\s*)?"
+    r"^(?P<title>.+?\.)\s*(?:In\s*:\s*)?(?P<eds>.+?)\s*\(?eds?\.\)?\s*(?P<src>.+?),\s*(?:pp?\s*\.\s*)?"
     r"(?P<fp>\d+)\s*[-–]\s*(?P<lp>\d+)\.\s*(?P<pub>.+)$")
 # 題名．出版社．(所在地なし)．ただし「…報告書（追加調査）．」のような副題は出版社ではない
 BOOK_PUB = re.compile(r"[.．]\s*(?P<pub>[^.．,，「」]+?)\s*[.．]\s*$")
@@ -375,7 +378,7 @@ class Ref:
                     self.tail_journal(rest, jm))
         # 出版社の候補に閉じ括弧だけが入るのは切れ目の取り違え
         # (「…（付着色植生図　4，付表），横浜．」．植生学会誌 14(2) の B6)
-        elif (bm and not re.search(r"(In:|編「|（編）|pp\.)", rest)
+        elif (bm and not re.search(r"(In\s*:|編「|（編）|pp\.)", rest)
               and bm.group("pub").count("）") <= bm.group("pub").count("（")
               and bm.group("pub").count(")") <= bm.group("pub").count("(")):
             self.kind = "book"
@@ -390,7 +393,7 @@ class Ref:
                     + inline(esc(rest[bm.end("pub"):bm.start("loc")]))
                     + f"<publisher-loc>{esc(bm.group('loc'))}</publisher-loc>"
                     + inline(esc(rest[bm.end("loc"):])))
-        elif BOOK_PUB.search(rest) and not re.search(r"(In:|編「|（編）|pp\.)", rest)                 and not NOT_PUB.search(BOOK_PUB.search(rest).group("pub").strip()):
+        elif BOOK_PUB.search(rest) and not re.search(r"(In\s*:|編「|（編）|pp\.)", rest)                 and not NOT_PUB.search(BOOK_PUB.search(rest).group("pub").strip()):
             pm = BOOK_PUB.search(rest)
             self.kind = "book"
             main = rest[:pm.start()]

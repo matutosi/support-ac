@@ -155,7 +155,19 @@ def tag_en_authors(auth):
                    f'<given-names>{esc(given)}</given-names></string-name>{esc(trail)}')
         names.append(sur)
         pos = m.end()
-    out.append(esc(auth[pos:]))
+    # 並びの最後だけ「& Li, Sek-ha」のようにイニシャルでない名のことがある
+    # (18(2):99 の B17)．末尾に限るのは，題名の語を名と読まないため
+    tail = re.match(r"^(?P<lead>\s*(?:&|＆|and\s|,\s)\s*)(?P<sur>[A-Z][A-Za-z'\u2019\-]+)\s*,\s*"
+                    r"(?P<given>[A-Z][A-Za-z\u00e0-\u00ff]*(?:-[A-Za-z]+)*)\s*$", auth[pos:])
+    if names and tail:
+        out[-1] = out[-1] if out else ""
+        out.append(esc(tail.group("lead")) +
+                   f'<string-name name-style="western" xml:lang="en">'
+                   f'<surname>{esc(tail.group("sur"))}</surname>, '
+                   f'<given-names>{esc(tail.group("given"))}</given-names></string-name>')
+        names.append(tail.group("sur"))
+    else:
+        out.append(esc(auth[pos:]))
     if not names:
         return None, []
     return "".join(out), names
@@ -220,6 +232,9 @@ JOURNAL_TAIL = re.compile(
     r"(?:[A-Z][A-Za-z]{0,5}\.\s*|[A-Z][a-z]{2,11}[ 　]+(?=[A-Z][A-Za-z]{0,5}\.)){1,6}[A-Z][A-Za-z]{0,11}\.?"
     # 「…Ser. E (Biol.)」のように括弧つきの略記で終わる誌名もある (18(1):23 の B8，18(1):31 の B19)
     r"(?:\s*[（(][A-Za-z][A-Za-z.]{0,9}[)）])?"
+    # 「Sci. Rep. Yokohama Nat. Univ., Sect II, 15：1-23.」のように，
+    # 読点のあとに部門 (Sect・Ser・Sec) が続く誌名もある (18(2):99 の B23)
+    r"(?:\s*[,，]\s*(?:Sect|Sec|Ser)[.．]?\s*[A-Z\u2160-\u216f\u2170-\u217f0-9]{1,4}[.．]?)?"
     r"|(?:[A-Z][a-z]{2,11}[ 　])?[A-Z][A-Za-z]{0,3}\.\s*[A-Z][A-Za-z]{0,11}\."
     r"|[^.．\s][^.．]*?)(?:\s*[.．,，]\s*|\s+)"
     # 巻は「52-53」のような範囲や，「Suppl. 1」のような別冊の言い方もある．
@@ -263,11 +278,25 @@ CHAPTER_JA2 = re.compile(
 # 「In:」も「」も使わない和文の編著の章
 # (「章題．書名（編者編），pp.33-94．出版社．」．18(1):23 の B7，18(1):39 の B1・B5・B10・B17)
 CHAPTER_JA3 = re.compile(
-    r"^(?P<title>.+?[.．])\s*(?P<src>[^.．]+?)\s*[（(](?P<eds>[^）)]+?)\s*(?:編著|編|監修)[）)]"
+    r"^(?P<title>.+?[.．])\s*(?P<src>[^.．]+?)\s*"
+    # 編者の括弧が無い (書名のあとにそのままページが来る) 書き方もある．
+    # 編者を書くときは，そのあとの読点を省くことがある (「（…編）pp. 19-47.」．18(2):87 の B4)
+    r"(?:[（(](?P<eds>[^）)]+?)\s*(?:編著|編|監修)[）)]\s*[,，]?|[,，])"
     # ページのあとは「．」のほか「．，」と重ねることもあり，出版社と所在地の区切りも
     # 読点でなく句点のことがある (「pp. 186-197., 至文堂. 東京.」．18(2):99 の B24)
-    r"\s*[,，]\s*(?:pp?\s*[.．]\s*)?(?P<fp>\d+)\s*[-–−]\s*(?P<lp>\d+)\s*(?:[.．]\s*[,，]?|[,，])\s*"
+    r"\s*(?:pp?\s*[.．]\s*)?(?P<fp>\d+)\s*[-–−]\s*(?P<lp>\d+)\s*(?:[.．]\s*[,，]?|[,，])\s*"
     r"(?P<pub>[^,，.．]+?)(?:\s*[,，.．]\s*(?P<loc>[^,，.．]+?))?\s*[.．]?\s*$")
+def ja3(rest):
+    """CHAPTER_JA3 を当てる．書名が数字や1〜2字だけになる当たり方は採らない．
+
+    「大町市史，Vol. 1, pp. 655-663.」のように書名の中に句点があると，
+    書名の切れ端 (「1」) だけが残る形で当たってしまう (16(1):115 の B80)．"""
+    m = CHAPTER_JA3.match(rest)
+    if m and (not m.group("src").strip() or re.fullmatch(r"[\dA-Za-z\s　,，]+", m.group("src"))):
+        return None
+    return m
+
+
 CHAPTER_EN = re.compile(
     r"^(?P<title>.+?\.)\s*(?:In:\s*)?(?P<eds>.+?)\s*\(?eds?\.\)?\s*(?P<src>.+?),\s*(?:pp?\s*\.\s*)?"
     r"(?P<fp>\d+)\s*[-–]\s*(?P<lp>\d+)\.\s*(?P<pub>.+)$")
@@ -322,7 +351,7 @@ class Ref:
         rest = m.group("rest")
         jm = JOURNAL_TAIL.search(rest)
         bm = BOOK_TAIL.search(rest)
-        cm = ((CHAPTER_JA.match(rest) or CHAPTER_JA2.match(rest) or CHAPTER_JA3.match(rest))
+        cm = ((CHAPTER_JA.match(rest) or CHAPTER_JA2.match(rest) or ja3(rest))
               if self.lang == "ja"
               # 編者を括弧で後置する形を先に見る (CHAPTER_EN だと編者と書名が入れ替わるため)
               else (CHAPTER_EN2.match(rest) or CHAPTER_EN.match(rest)))

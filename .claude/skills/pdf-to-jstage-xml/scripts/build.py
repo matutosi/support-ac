@@ -137,6 +137,27 @@ EN_NAME = re.compile(r"([^,&]+?),\s*((?:[A-Z][a-zà-ÿ]?\s?\.\s?-?\s?)+(?:\s*(?:
                      r"|[A-Z][a-zà-ÿ]?(?=\s*(?:&|and\b|,|$)))")
 
 
+# 並びの途中に，読点を落とした「Li Y.」の形が混ざることがある
+# (「Nakamura, T., Go, T., Li Y. & Hayashi, I.」．19(1):55 の B4)．
+# 区切りに挟まれた所でだけ見るので，題名の語を姓名と取り違えることはない
+NAME_NO_COMMA = re.compile(r"(?P<sur>[A-Z][A-Za-z'\u2019\-]+)[ 　]"
+                           r"(?P<given>(?:[A-Z]\s*\.?\s*){1,3})(?=\s*(?:&|＆|and\b|[,，]|$))")
+
+
+def tag_gap(seg):
+    """著者の間の区切りの中に「Li Y.」があればタグを付ける (無ければそのまま)．"""
+    out, pos, n = [], 0, 0
+    for m in NAME_NO_COMMA.finditer(seg):
+        given = m.group("given").rstrip()
+        out.append(esc(seg[pos:m.start()]) +
+                   f'<string-name name-style="western" xml:lang="en">'
+                   f'<surname>{esc(m.group("sur"))}</surname> '
+                   f'<given-names>{esc(given)}</given-names></string-name>' +
+                   esc(m.group("given")[len(given):]))
+        pos, n = m.end(), n + 1
+    return ("".join(out) + esc(seg[pos:]), n)
+
+
 def tag_en_authors(auth):
     """「Batáry, P., Holzschuh, A. & Tscharntke, T.」の各人を string-name で囲む (区切りは残す)．"""
     out, pos, names = [], 0, []
@@ -148,7 +169,10 @@ def tag_en_authors(auth):
         if conj:
             lead += conj.group(1)
             sur = conj.group(2)
-        out.append(esc(auth[pos:m.start(1)]) + esc(lead))
+        gap, gn = tag_gap(auth[pos:m.start(1)])
+        if gn:
+            names.append("")            # 名前の数だけ数える (先頭の姓は使わない)
+        out.append(gap + esc(lead))
         given = m.group(2).rstrip()
         trail = m.group(2)[len(given):]
         out.append(f'<string-name name-style="western" xml:lang="en"><surname>{esc(sur)}</surname>, '

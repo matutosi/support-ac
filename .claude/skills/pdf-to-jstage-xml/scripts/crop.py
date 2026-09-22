@@ -23,7 +23,7 @@ import pymupdf
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("work")
-    ap.add_argument("--pdf", help="既定は <作業ディレクトリ>/<作業ディレクトリ名>.pdf")
+    ap.add_argument("--pdf", help="既定は <作業ディレクトリ> の中の PDF (1つだけのとき)")
     ap.add_argument("--page", type=int, required=True)
     ap.add_argument("--rect", required=True, help="x0,y0,x1,y1 (pt)")
     ap.add_argument("--dpi", type=int, default=300)
@@ -33,7 +33,14 @@ def main():
     args = ap.parse_args()
 
     work = Path(args.work)
-    pdf = Path(args.pdf) if args.pdf else work / f"{work.name}.pdf"
+    if args.pdf:
+        pdf = Path(args.pdf)
+    else:
+        # 作業ディレクトリに置く PDF は <記事識別子>.pdf なので，名前ではなく個数で決める
+        cands = sorted(work.glob("*.pdf"))
+        if len(cands) != 1:
+            raise SystemExit(f"{work} の PDF が {len(cands)} 個ある．--pdf で渡す")
+        pdf = cands[0]
     out = work / args.out
     out.parent.mkdir(parents=True, exist_ok=True)
 

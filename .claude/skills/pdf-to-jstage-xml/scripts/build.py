@@ -940,12 +940,27 @@ def compare_web_refs(work, refs):
         # 通し番号が付き，姓が総大文字で，年の位置も違う．番号を外し，大文字小文字も揃える
         n = re.sub(r"^\d+[)）]", "", norm(t)).casefold()
         y = re.search(r"(1[89]|20)\d{2}", n)
-        return (n[:5], y.group(0) if y else "")
+        # 和文は第2著者以降の書き方が違う (PDF は「服部保・石田弘明…」，ウェブは「服部保ほか」)．
+        # 最初の区切り・「ほか」・数字の手前までを筆頭著者とみなす (20(1):31)
+        head = re.split(r"[・･]|ほか|らほか|etal|[0-9]", n)[0][:6]
+        return (head, y.group(0) if y else "")
     rest = list(range(len(web)))
     pair = {}
-    for i, p in enumerate(pdf):                 # まず著者の先頭と年が合うものを組にする
+
+    def same(a, b):
+        """筆頭著者の先頭が一方の頭に一致し，年が同じなら同じ文献とみなす．
+
+        ウェブ版は題名が著者に続くので，PDF 側より頭が長くなることがある
+        (PDF「服部保」/ ウェブ「服部保日本本」)．短い方が長い方の頭ならよしとする．"""
+        if a[1] != b[1] or not a[1]:
+            return False
+        x, y2 = a[0], b[0]
+        return len(min(x, y2, key=len)) >= 2 and (x.startswith(y2) or y2.startswith(x))
+
+    for i, p in enumerate(pdf):                 # まず筆頭著者と年が合うものを組にする
+        kp = key(p)
         for j in list(rest):
-            if key(web[j]) == key(p):
+            if same(key(web[j]), kp):
                 pair[i] = j
                 rest.remove(j)
                 break

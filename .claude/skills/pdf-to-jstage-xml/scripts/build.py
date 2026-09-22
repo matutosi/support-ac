@@ -131,10 +131,36 @@ def tag_ja_name(name):
 # イニシャルの点が落ちている原文もある (「Ishizuka, M & Sugawara, S. 1986.」．植生学会誌 14(2))．
 # 点の無いイニシャルは，後ろが区切り (& / and / , / 行末) のときだけ認める
 # イニシャルの前に空白が入る原文もある (「Krummel, J .P.」．16(2):103 の B16)
-# 筆頭著者のカンマが落ちている原文もある (「Brown W. H. & Matthews, D. M. 1914.」．15(1):19)．
-# 点の無いイニシャルは大文字1字に限る (「Chapin III, F.S.」が割れるのを防ぐ)
-# 「Fang, J-Y.」「Wang, C-W.」のようにイニシャルが引き合わせてある原文もある
-EN_NAME = re.compile(r"([^,&]+?),?\s*((?:[A-Z][a-zà-ÿ]?(?:\s?-\s?[A-Z][a-zà-ÿ]?)?\s?\.\s?-?\s?)+|(?<![A-Z])[A-Z](?=\s*(?:&|and|,|$)))")
+# 世代を表す呼称が続くこともある (「Webb, T III.」．18(1):31 の B14)
+# 「Fang, J-Y.」「Wang, C-W.」のようにイニシャルを引き合わせてある原文もある (15(2):79)
+EN_NAME = re.compile(r"([^,&]+?),\s*((?:[A-Z][a-zà-ÿ]?(?:\s?-\s?[A-Z][a-zà-ÿ]?)?\s?\.\s?-?\s?)+(?:\s*(?:Jr|Sr|I{1,3}|IV|V)\.?)?"
+                     r"|[A-Z][a-zà-ÿ]?\s+(?:Jr|Sr|I{1,3}|IV|V)\.?"
+                     r"|[A-Z][a-zà-ÿ]?(?=\s*(?:&|and\b|,|$)))")
+
+
+# 並びの途中に，読点を落とした「Li Y.」の形が混ざることがある
+# (「Nakamura, T., Go, T., Li Y. & Hayashi, I.」．19(1):55 の B4)．
+# 区切りに挟まれた所でだけ見るので，題名の語を姓名と取り違えることはない
+NAME_NO_COMMA = re.compile(r"(?P<sur>[A-Z][A-Za-z'\u2019\-]+)[ 　]"
+                           r"(?P<given>(?:[A-Z]\s*\.?\s*){1,3})(?=\s*(?:&|＆|and\b|[,，]|$))")
+
+
+def tag_gap(seg):
+    """「Li Y.」のように姓のあとの読点を落とした名前にタグを付ける (無ければそのまま)．
+
+    姓のあとに読点を打たない書式の雑誌もあり，その号では著者が1人も分かれない
+    (「Glaser P.H., Janssens J.A. & Siegel D.I.」．19(2):95 の B11)．"""
+    out, pos, names = [], 0, []
+    for m in NAME_NO_COMMA.finditer(seg):
+        given = m.group("given").rstrip()
+        out.append(esc(seg[pos:m.start()]) +
+                   f'<string-name name-style="western" xml:lang="en">'
+                   f'<surname>{esc(m.group("sur"))}</surname> '
+                   f'<given-names>{esc(given)}</given-names></string-name>' +
+                   esc(m.group("given")[len(given):]))
+        pos = m.end()
+        names.append(m.group("sur"))
+    return ("".join(out) + esc(seg[pos:]), names)
 
 
 def tag_en_authors(auth):
@@ -150,7 +176,9 @@ def tag_en_authors(auth):
         if conj:
             lead += conj.group(1)
             sur = conj.group(2)
-        out.append(esc(auth[pos:m.start(1)]) + esc(lead))
+        gap, gn = tag_gap(auth[pos:m.start(1)])
+        names += gn
+        out.append(gap + esc(lead))
         given = m.group(2).rstrip()
         trail = m.group(2)[len(given):]
         # 姓と名の間の区切りは原文のまま残す (「Braun-Blanquet J.」のようにカンマの無い原文がある．
@@ -160,10 +188,59 @@ def tag_en_authors(auth):
                    f'<given-names>{esc(given)}</given-names></string-name>{esc(trail)}')
         names.append(sur)
         pos = m.end()
-    out.append(esc(auth[pos:]))
+    # 並びの最後だけ「& Li, Sek-ha」のようにイニシャルでない名のことがある
+    # (18(2):99 の B17)．末尾に限るのは，題名の語を名と読まないため
+    tail = re.match(r"^(?P<lead>\s*(?:&|＆|and\s|,\s)\s*)(?P<sur>[A-Z][A-Za-z'\u2019\-]+)\s*,\s*"
+                    r"(?P<given>[A-Z][A-Za-z\u00e0-\u00ff]*(?:-[A-Za-z]+)*)\s*$", auth[pos:])
+    if names and tail:
+        out[-1] = out[-1] if out else ""
+        out.append(esc(tail.group("lead")) +
+                   f'<string-name name-style="western" xml:lang="en">'
+                   f'<surname>{esc(tail.group("sur"))}</surname>, '
+                   f'<given-names>{esc(tail.group("given"))}</given-names></string-name>')
+        names.append(tail.group("sur"))
+    else:
+        tail_xml, tail_names = tag_gap(auth[pos:])   # 末尾にも読点なしの名前が来る
+        out.append(tail_xml)
+        names += tail_names
     if not names:
         return None, []
     return "".join(out), names
+
+
+# 編者は「W. Holzner, M. J. A. Werger & I. Ikushima」のように名を先に書くことがある
+# (18(2):47 の B9)．姓が後ろに来るので EN_NAME (「姓, 名.」) では取れない
+GIVEN_FIRST = re.compile(r"^\s*(?P<given>(?:[A-Z]\s*\.\s*)+)"
+                         r"(?P<sur>[A-Z][A-Za-z'\u2019\-]+(?:\s+[A-Z][A-Za-z'\u2019\-]+)*)\s*$")
+
+
+def tag_en_names_given_first(s):
+    """「W. Holzner, M. J. A. Werger & I. Ikushima」の各人を string-name で囲む．
+
+    全員がこの形のときだけ使う (1人でも「姓, 名.」の形が混ざれば None を返して
+    tag_en_authors に任せる)．"""
+    parts = re.split(r"(\s*(?:[,，]|&|＆|\band\b)\s*)", s)
+    out, n = [], 0
+    for i, part in enumerate(parts):
+        if i % 2:                       # 区切りはそのまま
+            out.append(esc(part))
+            continue
+        if not part.strip():
+            out.append(esc(part))
+            continue
+        m = GIVEN_FIRST.match(part)
+        if not m:
+            return None, 0
+        lead = part[: len(part) - len(part.lstrip())]
+        given = m.group("given").rstrip()
+        gap = m.group("given")[len(given):]      # 名と姓の間の空き (原文のまま残す)
+        # 原文が「名 姓」の順なので，タグもその順に置く (姓を前に出すと
+        # 表示される文字が変わり，PDF と HTML の内容が違ってしまう．19(1):55 の B20)
+        out.append(esc(lead) + f'<string-name name-style="western" xml:lang="en">'
+                   f'<given-names>{esc(given)}</given-names>{esc(gap)}'
+                   f'<surname>{esc(m.group("sur"))}</surname></string-name>')
+        n += 1
+    return ("".join(out), n) if n else (None, 0)
 
 
 # 年は「1996．」のほか，古い号では「1971-78．」「1979-80．」のような範囲で書かれることがある
@@ -174,14 +251,50 @@ JOURNAL_TAIL = re.compile(
     # 誌名は *斜体* で囲まれていれば中に「.」があってもよい (J. Sci. Hiroshima Univ. など)
     # 誌名と巻の間は，読点のほか「Journal of Ecology. 19 : 95-99.」のように
     # 句点のこともある (16(2):103 の B1．これを受けないと雑誌と分からず書籍になる)
-    r"\s*(?P<src>\*[^*]+\*|[^.．\s][^.．]*?)(?:\s*[.．,，]\s*|\s+)"
-    # 巻は「52-53」のような範囲や，「Suppl. 1」のような別冊の言い方もある．
+    # 誌名は *斜体* で囲まれていれば中に「.」があってもよい．
+    # 囲まれていなくても，「Eco. Rev.」「J. Veg. Sci.」「Bot. Mag. Tokyo」のように
+    # 略記の切れ目の「.」だけでできているものは誌名として拾う (17(2):89・16(2):103)．
+    # 略記は「大文字で始まる 5 字までの語 + .」の並びとみなす
+    r"\s*(?P<src>\*[^*]+\*"
+    # 先頭は 4 字までの略記に限る．題名の末尾の語 (「…in Japan.」「…of Tokyo.」) を
+    # 誌名に巻き込まないため (5 字の Japan・Tokyo は先頭になれない)
+    # 略記が2つ以上なら最後は点が無くてもよい (Bot. Mag. Tokyo)．
+    # 1つだけのときは最後にも点が要る (Eco. Rev.)．
+    # そうしないと「…in Asia. Vegetatio 100: …」の Asia を誌名に含めてしまう
+    # 「Korean J. Ecol.」のように，略記の前に点の付かない語が来ることもある．
+    # 点で終わる語ではないので，題名の末尾の「…in Japan.」とは紛れない
+    # 略記の途中の，点の付かない語 (「Bull. Tokyo Univ. For.」の Tokyo) は，
+    # **直後がまた略記のときだけ**許す．「USA. Tree Physiology」「Mt. Iide. Ecological Review」
+    # のように題名の語を巻き込む形を除くため
+    r"|(?:[A-Z][a-z]{2,11}[ 　])?[A-Z][A-Za-z]{0,3}\.\s*"
+    r"(?:[A-Z][A-Za-z]{0,5}\.\s*|[A-Z][a-z]{2,11}[ 　]+(?=(?:[A-Z][a-z]{2,11}[ 　]+)*[A-Z][A-Za-z]{0,5}\.)){1,6}[A-Z][A-Za-z]{0,11}\.?"
+    # 「…Ser. E (Biol.)」のように括弧つきの略記で終わる誌名もある (18(1):23 の B8，18(1):31 の B19)
+    r"(?:\s*[（(][A-Za-z][A-Za-z.]{0,9}[)）])?"
+    # 「Sci. Rep. Yokohama Nat. Univ., Sect II, 15：1-23.」のように，
+    # 読点のあとに部門 (Sect・Ser・Sec) が続く誌名もある (18(2):99 の B23)
+    r"(?:\s*[,，]\s*(?:Sect|Sec|Ser)[.．]?\s*[A-Z\u2160-\u216f\u2170-\u217f0-9]{1,4}[.．]?)?"
+    # 「Bull. Fac. Agr., Tamagawa Univ., 38：1-10.」のように，読点のあとに
+    # 大学名などが続く誌名もある (19(1):25 の B23)
+    r"(?:\s*[,，]\s*(?:[A-Z][a-z]{2,11}[ 　]+)*[A-Z][A-Za-z]{0,7}[.．])?"
+    r"|(?:[A-Z][a-z]{2,11}[ 　])?[A-Z][A-Za-z]{0,3}\.\s*[A-Z][A-Za-z]{0,11}\."
+    # 「Trans. ASAE」「J. JASS」のように，略記のあとが頭字語だけの誌名もある
+    # (19(1):25 の B13・B24)．頭字語は大文字だけなので，題名の末尾の語とは紛れない
+    r"|[A-Z][a-z]{0,7}[.．]\s*[A-Z]{2,6}"
+    r"|[^.．\s][^.．]*?)(?:\s*[.．,，]\s*|\s+)"
+    # 巻は「52-53」「41/42」(合併号．19(1):25 の B11・B22)・「66 A-9」(19(1):43 の B23)
+    # のような範囲や，「Suppl. 1」のような別冊の言い方もある．
     # 巻を立てず号だけの雑誌もある (「フロラ栃木，(3)：1-10」．植生学会誌 13(2) の B3)
-    r"(?:(?P<vol>(?:Suppl\.?\s*|Spec\.?\s*)?[A-Za-z]?\d+(?:\s*[-–−]\s*\d+)?[A-Za-z]?)"
-    r"(?:\s*[（(](?P<iss>[^)）]+)[)）])?|[（(](?P<iss2>[^)）]+)[)）])"
+    # 紙面が巻を太字で組む雑誌があり，body.md も原文どおり **75** と書く (19(1):25 の B11)
+    r"(?:\*{0,2}(?P<vol>(?:Suppl\.?\s*|Spec\.?\s*|[Nn]o\s*[.．]\s*)?[A-Za-z]?\d+(?:\s*[-–−/／]\s*\d+)?[A-Za-z]?(?:[ 　][A-Z][-–−]\d+)?)"
+    # 巻と号をハイフンでつなぐ書き方もある (「土木技術資料, 41-(7)：32-37」．18(1):1 の B5)
+    r"\*{0,2}(?:\s*[-–−]?\s*[（(](?P<iss>[^)）]+)[)）])?|[（(](?P<iss2>[^)）]+)[)）])"
     # ページは「14：p.151．」のように p. が付くこともある (1ページだけの記事)
-    r"\s*[:：]\s*(?:p\s*\.\s*)?(?P<fp>[A-Za-z]?\d+)"
+    # 巻とページの間を読点で区切る和文の雑誌もある (「生態学会誌, 42, 241-248.」．19(1):61 の B29)
+    r"\s*[:：,，]\s*(?:p\s*\.\s*)?(?P<fp>[A-Za-z]?\d+)"
     r"(?:\s*[-–−₋~〜～]\s*(?P<lp>[A-Za-z]?\d+))?"
+    # 分載の論文は「9：1-37, 108-127, 195-219, 271-300．」のようにページ範囲を並べる
+    # (18(2):107 の B3)．2つめ以降は文字のまま置く (fpage・lpage は先頭の範囲)
+    r"(?:\s*[,，]\s*\d+\s*[-–−₋~〜～]\s*\d+)*"
     # 「1-10, pls. 1-4.」のように図版の付記が続くことがある (植生学会誌 13(2) の B3)
     r"(?:\s*[,，]\s*(?:pls?|figs?)\s*\.?\s*[\dA-Za-z,\s\-–−]*)?"
     r"(?:\s*[+＋]\s*[^.．]*)?"
@@ -191,8 +304,15 @@ JOURNAL_TAIL = re.compile(
     # 「(in Japanese with English summary).」のような付記が続くことがある．
     # これを受けないと雑誌と分からず，書籍として誌名と題名が入れ替わっていた (16(2):149)．
     # 原文の閉じ括弧が落ちていることもある (同 Maesako 1985) ので，閉じは無くてもよい
-    r"(?:\s*[（(][^)）]*[)）]?)?"
+    # 「Hikobia 9: 137-145. (In Japanese with English summary).」のように，
+    # ページのあとに句点を置いてから括弧が来ることもある (17(2):81)
+    r"(?:\s*[.．]?\s*[（(][^)）]*[)）]?)?"
     r"\s*[.．]?\s*$")     # 「371-486+30 plates.」のような後ろ付きも雑誌として扱う
+# 編者を書名のあとに括弧で置く書き方もある
+# (「In: 書名．副題．(ed. H. Dierschke), pp. 21-39. J. Cramer, Vaduz.」．17(1):1・17(1):31)
+CHAPTER_EN2 = re.compile(
+    r"^(?P<title>.+?\.)\s*(?:In\s*:\s*)?(?P<src>.+?)\s*[（(]\s*eds?\.?(?:\s+by)?\s+(?P<eds>[^)）]*)[)）]"
+    r"\s*[,，]?\s*(?:pp?\s*\.\s*)?(?P<fp>\d+)\s*[-–]\s*(?P<lp>\d+)\s*[.．]\s*(?P<pub>.+)$")
 CHAPTER_JA = re.compile(
     r"^(?P<title>.+?[.．])\s*(?P<eds>[^「」．.]+?)編「(?P<src>[^」]+)」\s*[,，]\s*(?P<fp>\d+)(?:\s*[-–]\s*(?P<lp>\d+))?"
     r"\s*[.．]\s*(?P<pub>[^,，．.]+?)\s*[,，]\s*(?P<loc>[^.．]+?)\s*[.．]\s*$")
@@ -203,12 +323,73 @@ CHAPTER_JA2 = re.compile(
     r"^(?P<title>.+?[.．])\s*「(?P<src>[^」]+)」\s*"
     r"(?:[（(](?P<eds>[^）)]+?)\s*(?:編著|編|監修)[）)])?\s*[,，]\s*(?:pp?\s*\.\s*)?(?P<fp>\d+)"
     r"(?:\s*[-–]\s*(?P<lp>\d+))?\s*[.．]\s*(?P<pub>[^,，．.]+?)\s*[,，]\s*(?P<loc>[^.．]+?)\s*[.．]\s*$")
+# 「In:」を書かない号もある (「章題. 編者 (eds.) 書名, pp. 243-272. 出版社, 所在地.」．17(2):97)．
+# ページに pp. が付くこともある
+# 「In:」も「」も使わない和文の編著の章
+# (「章題．書名（編者編），pp.33-94．出版社．」．18(1):23 の B7，18(1):39 の B1・B5・B10・B17)
+CHAPTER_JA3 = re.compile(
+    r"^(?P<title>.+?[.．])\s*(?P<src>[^.．]+?)\s*"
+    # 編者の括弧が無い (書名のあとにそのままページが来る) 書き方もある．
+    # 編者を書くときは，そのあとの読点を省くことがある (「（…編）pp. 19-47.」．18(2):87 の B4)
+    r"(?:[（(](?P<eds>[^）)]+?)\s*(?:編著|編|監修)[）)]\s*[,，]?|[,，])"
+    # ページのあとは「．」のほか「．，」と重ねることもあり，出版社と所在地の区切りも
+    # 読点でなく句点のことがある (「pp. 186-197., 至文堂. 東京.」．18(2):99 の B24)
+    r"\s*(?:pp?\s*[.．]\s*)?(?P<fp>\d+)\s*[-–−]\s*(?P<lp>\d+)\s*(?:[.．]\s*[,，]?|[,，])\s*"
+    r"(?P<pub>[^,，.．]+?)(?:\s*[,，.．]\s*(?P<loc>[^,，.．]+?))?\s*[.．]?\s*$")
+def ja3(rest):
+    """CHAPTER_JA3 を当てる．書名が数字や1〜2字だけになる当たり方は採らない．
+
+    「大町市史，Vol. 1, pp. 655-663.」のように書名の中に句点があると，
+    書名の切れ端 (「1」) だけが残る形で当たってしまう (16(1):115 の B80)．"""
+    m = CHAPTER_JA3.match(rest)
+    if not m:
+        return None
+    if not m.group("src").strip() or re.fullmatch(r"[\dA-Za-z\s　,，]+", m.group("src")):
+        return None
+    # 出版社・所在地がページの範囲になる当たり方も採らない．分載の論文
+    # (「地理学評論，9：1-37, 108-127, 195-219, 271-300．」) は雑誌 (18(2):107 の B3)
+    for g in ("pub", "loc"):
+        if m.group(g) and NOT_PUB.search(m.group(g).strip()):
+            return None
+    return m
+
+
 CHAPTER_EN = re.compile(
-    r"^(?P<title>.+?\.)\s*In:\s*(?P<eds>.+?)\s*\(?eds?\.\)?\s*(?P<src>.+?),\s*(?P<fp>\d+)\s*[-–]\s*(?P<lp>\d+)\.\s*(?P<pub>.+)$")
+    r"^(?P<title>.+?\.)\s*(?:In\s*:\s*)?(?P<eds>.+?)\s*\(?eds?\.\)?\s*(?P<src>.+?),\s*(?:pp?\s*\.\s*)?"
+    r"(?P<fp>\d+)\s*[-–]\s*(?P<lp>\d+)\.\s*(?P<pub>.+)$")
+# 「In :」を必ず見る形．章題の中に「Mt.」「No.」のような略記があると，
+# 「In :」が任意だと略記の点を章題の終わりと取り違える (「Mt. Horai. In : …」．19(1):1 の B22)
+CHAPTER_EN2_IN = re.compile(CHAPTER_EN2.pattern.replace(r"(?:In\s*:\s*)?", r"In\s*:\s*"))
+CHAPTER_EN_IN = re.compile(CHAPTER_EN.pattern.replace(r"(?:In\s*:\s*)?", r"In\s*:\s*"))
+# 編者を書かない英文の報告書の章 (「章題. In : 報告書名, pp. 37-48. 発行者 (in Japanese).」．
+# 19(1):1 の B16・B39)．和文の CHAPTER_JA3 と同じ形で，前に「In :」が付く
+# 発行者・発行地のあとにページを置く章もある
+# (「章題. In : 書名 (ed. A. Miyawaki), 発行者. 東京. pp. 55-60 (付記).」．19(1):11 の B9・B15)
+CHAPTER_EN4 = re.compile(
+    r"^(?P<title>.+?[.．])\s*In\s*:?\s*(?P<src>.+?)\s*[（(]\s*[Ee]ds?\.?(?:\s+by)?\s+"
+    r"(?P<eds>[^)）]*)[)）]\s*[,，.．]?\s*(?P<pub>.+?)\s*[.．]\s*(?P<loc>[^.．,，]+?)\s*[.．]\s*"
+    r"pp?\s*[.．]\s*(?P<fp>\d+)\s*[-–−]\s*(?P<lp>\d+)\s*(?:[（(][^)）]*[)）])?\s*[.．]?\s*$")
+CHAPTER_EN3 = re.compile(
+    r"^(?P<title>.+?[.．])\s*In\s*:\s*(?P<src>.+?)\s*[,，]\s*(?:pp?\s*[.．]\s*)?"
+    r"(?P<fp>\d+)\s*[-–−]\s*(?P<lp>\d+)\s*[.．]\s*"
+    r"(?P<pub>[^.．].*?)\s*[.．]?\s*(?:[（(][^)）]*[)）])?\s*[.．]?\s*$")
 # 題名．出版社．(所在地なし)．ただし「…報告書（追加調査）．」のような副題は出版社ではない
+# 末尾の句点は落とさない．落ちている紙面もあるが (「…75年史. 東京大学」．19(2):125 の B14)，
+# 句点を任意にすると「…大明堂．東京」の発行地を出版社と取り違える (16(2):103・18(1):39)
 BOOK_PUB = re.compile(r"[.．]\s*(?P<pub>[^.．,，「」]+?)\s*[.．]\s*$")
-NOT_PUB = re.compile(r"(報告書|調査|目録|一覧|紀要|年報)$|[）)]$")
-BOOK_TAIL = re.compile(r"\s*(?P<pub>[^.．,，「」\s][^.．,，「」]*?)\s*[,，]\s*(?P<loc>[^.．,，「」]+?)\s*[.．]\s*$")
+# 出版社の候補が数字やページの範囲だけのものは出版社ではない
+# (「…特定植物群落調査報告書，pp．21−22．」の 21−22．17(1):23 の B7)
+NOT_PUB = re.compile(r"(報告書|調査|目録|一覧|紀要|年報)$|[）)]$"
+                     r"|^[\dA-Za-z]*[\s　]*[\d]+[\s　]*[-–−~〜～][\s　]*\d+$|^[\d\s　]+$")
+# 出版社は「SPSS Inc., Chicago.」「… Co., Ltd., Tokyo.」のように略記で終わることがある
+# (19(1):1 の B32)．略記の点は出版社の一部なので，そこだけ点を許す
+BOOK_TAIL = re.compile(r"\s*(?P<pub>[^.．,，「」\s][^.．,，「」]*?"
+                       r"(?:\s*(?:Inc|Ltd|Co|Corp|Univ|Press|Publ|Pub)[.．])?)"
+                       # 発行地は「Washington, D.C.」のように略記が続くことがある
+                       # (19(2):73 の B3)．D.C. の点で切ると出版社と発行地が割れる
+                       r"\s*[,，]\s*(?P<loc>[^.．,，「」]+?"
+                       # 州の略号が続く形もある (「Vicksburg, MS.」．19(2):95 の B39)
+                       r"(?:\s*[,，]\s*(?:[A-Z][.．]\s*(?:[A-Z][.．])?|[A-Z]{2}))?)\s*[.．]?\s*$")
 
 
 class Ref:
@@ -254,7 +435,12 @@ class Ref:
         rest = m.group("rest")
         jm = JOURNAL_TAIL.search(rest)
         bm = BOOK_TAIL.search(rest)
-        cm = (CHAPTER_JA.match(rest) or CHAPTER_JA2.match(rest)) if self.lang == "ja" else CHAPTER_EN.match(rest)
+        cm = ((CHAPTER_JA.match(rest) or CHAPTER_JA2.match(rest) or ja3(rest))
+              if self.lang == "ja"
+              # 編者を括弧で後置する形を先に見る (CHAPTER_EN だと編者と書名が入れ替わるため)
+              else (CHAPTER_EN2_IN.match(rest) or CHAPTER_EN_IN.match(rest)
+                    or CHAPTER_EN2.match(rest) or CHAPTER_EN.match(rest)
+                    or CHAPTER_EN3.match(rest) or CHAPTER_EN4.match(rest)))
         if cm:
             self.kind = "book"
             body = self.chapter_xml(rest, cm)
@@ -265,28 +451,33 @@ class Ref:
                     self.tail_journal(rest, jm))
         # 出版社の候補に閉じ括弧だけが入るのは切れ目の取り違え
         # (「…（付着色植生図　4，付表），横浜．」．植生学会誌 14(2) の B6)
-        elif (bm and not re.search(r"(In:|編「|（編）|pp\.)", rest)
+        elif (bm and not re.search(r"(In\s*:|編「|（編）|pp\.)", rest)
+              # 発行地の位置に数字だけが来るのは，ページを発行地と取り違えた形
+              # (「…第106回日本林学会講演要旨集, 540」．18(2):75 の B24)
+              and not re.fullmatch(r"[\d\s　]+|[\dA-Za-z]*[\s　]*\d+[\s　]*[-–−~〜～][\s　]*\d+",
+                                  bm.group("loc").strip())
               and bm.group("pub").count("）") <= bm.group("pub").count("（")
               and bm.group("pub").count(")") <= bm.group("pub").count("(")):
             self.kind = "book"
             title = rest[:bm.start("pub")]
             t2 = title.rstrip()
-            end = re.search(r"[.．]\s*$", t2)
+            # 書名のあとが読点の書き方もある (「Saline Agriculture, National Academy Press, …」)
+            end = re.search(r"[.．,，]\s*$", t2)
             main = t2[: end.start()] if end else t2
             # タグで囲まない部分にも *斜体* の印が残ることがあるので inline を通す
             body = (f'<source xml:lang="{self.lang}">{inline(esc(main.strip()))}</source>'
                     + inline(esc(t2[len(main):])) + inline(esc(title[len(t2):]))
-                    + f"<publisher-name>{esc(bm.group('pub'))}</publisher-name>"
+                    + f"<publisher-name>{inline(esc(bm.group('pub')))}</publisher-name>"
                     + inline(esc(rest[bm.end("pub"):bm.start("loc")]))
-                    + f"<publisher-loc>{esc(bm.group('loc'))}</publisher-loc>"
+                    + f"<publisher-loc>{inline(esc(bm.group('loc')))}</publisher-loc>"
                     + inline(esc(rest[bm.end("loc"):])))
-        elif BOOK_PUB.search(rest) and not re.search(r"(In:|編「|（編）|pp\.)", rest)                 and not NOT_PUB.search(BOOK_PUB.search(rest).group("pub").strip()):
+        elif BOOK_PUB.search(rest) and not re.search(r"(In\s*:|編「|（編）|pp\.)", rest)                 and not NOT_PUB.search(BOOK_PUB.search(rest).group("pub").strip()):
             pm = BOOK_PUB.search(rest)
             self.kind = "book"
             main = rest[:pm.start()]
             body = (f'<source xml:lang="{self.lang}">{inline(esc(main))}</source>'
                     + inline(esc(rest[pm.start():pm.start("pub")]))
-                    + f"<publisher-name>{esc(pm.group('pub'))}</publisher-name>"
+                    + f"<publisher-name>{inline(esc(pm.group('pub')))}</publisher-name>"
                     + inline(esc(rest[pm.end("pub"):])))
         else:
             REPORT.append(f"文献の後半を分解できない (著者・年だけタグ付け): {self.id} {t[:70]}")
@@ -306,7 +497,9 @@ class Ref:
                 pos = b
             eds_xml = "".join(parts) + esc(eds[pos:])
         else:
-            eds_xml, _ = tag_en_authors(eds)
+            eds_xml, _ = tag_en_names_given_first(eds)
+            if not eds_xml:
+                eds_xml, _ = tag_en_authors(eds)
             eds_xml = eds_xml or esc(eds)
         wrap = {
             "title": lambda t: self.title_xml(t),
@@ -314,8 +507,10 @@ class Ref:
             "src": lambda t: f'<source xml:lang="{self.lang}">{inline(esc(t))}</source>',
             "fp": lambda t: f"<fpage>{esc(t)}</fpage>",
             "lp": lambda t: f"<lpage>{esc(t)}</lpage>",
-            "pub": lambda t: f"<publisher-name>{esc(t)}</publisher-name>",
-            "loc": lambda t: f"<publisher-loc>{esc(t)}</publisher-loc>",
+            # 斜体の印は発行者・発行地の側に入ることもある (書名を発行者と取り違えたとき)．
+            # そのまま出すと「*…*」の印が文字として残ってしまうので inline を通す
+            "pub": lambda t: f"<publisher-name>{inline(esc(t))}</publisher-name>",
+            "loc": lambda t: f"<publisher-loc>{inline(esc(t))}</publisher-loc>",
         }
         spans = []
         for k in wrap:
@@ -337,16 +532,27 @@ class Ref:
         t = title.rstrip()
         end = re.search(r"[.．]\s*$", t)
         main = t[: end.start()] if end else t
-        return (f'<article-title xml:lang="{self.lang}">{inline(esc(main.strip()))}</article-title>'
-                + esc(t[len(main):]) + esc(title[len(t):]))
+        # 題名の前後の空白はタグの外へ出す (落とすと PDF と文字が変わる．
+        # 「…*Larix dahurica* . Can. J. …」の空白を消していた．14(2):119 の B18)
+        core = main.strip()
+        lead = main[:len(main) - len(main.lstrip())]
+        trail = main[len(main.rstrip()):]
+        return (esc(lead) + f'<article-title xml:lang="{self.lang}">{inline(esc(core))}</article-title>'
+                + esc(trail) + esc(t[len(main):]) + esc(title[len(t):]))
 
     def tail_journal(self, rest, m):
         g = lambda k: esc(m.group(k))
         s = f'<source xml:lang="{self.lang}">{inline(esc(m.group("src").strip()))}</source>'
         iss = "iss" if m.group("iss") else ("iss2" if m.group("iss2") else None)
         if m.group("vol"):
-            s += esc(rest[m.end("src"):m.start("vol")]) + f"<volume>{g('vol')}</volume>"
+            pre = rest[m.end("src"):m.start("vol")]
             pos = m.end("vol")
+            bold = pre.endswith("**") and rest[pos:pos + 2] == "**"
+            if bold:                # 巻を太字で組む雑誌 (19(1):25)．太字のまま <volume> に入れる
+                pre, pos = pre[:-2], pos + 2
+                s += esc(pre) + f"<volume><bold>{g('vol')}</bold></volume>"
+            else:
+                s += esc(pre) + f"<volume>{g('vol')}</volume>"
         else:                       # 巻が無く号だけの雑誌
             pos = m.end("src")
         if iss:
@@ -551,7 +757,9 @@ def link_floats(text, floats):
         return out
     return re.sub(r"(図|表|Figs\.|Fig\.|Figures|Figure|Figs|Fig"
                   r"|Tables|Table|Tabs\.|Tab\.)(\s*)(\d+)"
-                  r"((?:\s*(?:[，,、]|and|&|＆)\s*\d+(?![\d.]))*)", rep, text)
+                  # 「Fig. 4, 1a」の「1a」のように英字が続くものは番号の続きではない
+                  # (Fig. 4 の中の群落 1 の下位単位 a を指す．17(2):55)
+                  r"((?:\s*(?:[，,、]|and|&|＆)\s*\d+(?![\d.A-Za-z]))*)", rep, text)
 
 
 APPENDIX_REF = re.compile(r"(Appendices|Appendix|付録)(\s*)(\d+)")
@@ -790,12 +998,64 @@ def compare_web_refs(work, refs):
     norm = lambda t: re.sub(r"[\s　．.，,]", "", unicodedata.normalize("NFKC", t))
     if len(web) != len(pdf):
         REPORT.append(f"引用文献の件数がウェブ版と違う: PDF {len(pdf)} 件 / ウェブ {len(web)} 件．並びもずれている恐れがある")
+    # 旧号ではウェブ版と PDF で並びが全く違うことがある (19(2):113 では 36 件すべてが
+    # 添字のずれで「違う」と出ていた)．著者の先頭と年で組にしてから比べる
+    def key(t):
+        # ウェブ版は「1) BRADFIELD G. E. 題名. 誌名. (1984) vol.55, p.105-114.」の形で，
+        # 通し番号が付き，姓が総大文字で，年の位置も違う．番号を外し，大文字小文字も揃える
+        n = re.sub(r"^\d+[)）]", "", norm(t)).casefold()
+        y = re.search(r"(1[89]|20)\d{2}", n)
+        return (n[:5], y.group(0) if y else "")
+    rest = list(range(len(web)))
+    pair = {}
+    for i, p in enumerate(pdf):                 # まず著者の先頭と年が合うものを組にする
+        for j in list(rest):
+            if key(web[j]) == key(p):
+                pair[i] = j
+                rest.remove(j)
+                break
+    for i in range(len(pdf)):                   # 組にならなかったものは，残りを順に当てる
+        if i not in pair and rest:
+            pair[i] = rest.pop(0)
+    # ウェブ版が「1) 著者. 題名. 誌名. (1984) vol.55, p.105-114.」のように
+    # 項目ごとに組み直されている号がある (旧号のほとんど)．そのときは並びも書き方も違う
+    structured = sum(bool(re.match(r"^\d+[)）]", l)) for l in web) > len(web) / 2
+
+    from collections import Counter
+
+    def words(t):
+        n = unicodedata.normalize("NFKC", t).casefold()
+        n = re.sub(r"^\s*\d+[)）]", "", n)             # ウェブ版の通し番号
+        n = re.sub(r"(?:doi|https?)\S*", "", n)        # ウェブ版だけが持つ DOI・URL
+        c = Counter(re.findall(r"[a-z]+|\d+|[^\x00-\x7f\W\d_]", n))
+        for w in ("vol", "p", "pp", "no", "in", "and"):  # 組み方の違いで出入りする語
+            c.pop(w, None)
+        for w in [w for w in c if len(w) == 1 and w.isascii()]:
+            c.pop(w)                                  # イニシャル (ウェブ版は落とすことがある)
+        return c
+
     content, form = 0, 0
-    for k, (w, p) in enumerate(zip(web, pdf)):
+    for k in range(len(pdf)):
+        if k not in pair:
+            continue
+        w, p = web[pair[k]], pdf[k]
         if w == p:
             continue
         if norm(w) == norm(p):
             form += 1
+            continue
+        if structured:
+            # ウェブ版が項目ごとに組み直された形のときは，字の並びで比べても意味が無い
+            # (年や巻の位置が違う)．語の多重集合で比べ，片方にしかない語だけを出す
+            miss = words(w) - words(p)
+            extra = words(p) - words(w)
+            if not miss and not extra:
+                form += 1
+                continue
+            content += 1
+            REPORT.append(f"引用文献がウェブ版と違う: B{k + 1} "
+                          + (f"ウェブにだけある語「{'・'.join(sorted(miss)[:5])}」" if miss else "")
+                          + (f" PDF にだけある語「{'・'.join(sorted(extra)[:5])}」" if extra else ""))
             continue
         content += 1
         a, b = norm(w), norm(p)

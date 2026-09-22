@@ -169,8 +169,8 @@ def main():
     for d in am.iter("date"):
         o.append(f"- {d.get('date-type')}: {d.findtext('year')}-{d.findtext('month')}-{d.findtext('day')}")
     for kg in am.iter("kwd-group"):
-        # キーワードに <italic> が入ると .text が空になるので，中の字をすべてつなぐ
-        o.append(f"- キーワード ({lang(kg)}): " + ", ".join("".join(k.itertext()) for k in kg.iter("kwd")))
+        # 斜体の印も出す．字だけ並べると，検証役が学名の斜体を確かめられない (17(2):73)
+        o.append(f"- キーワード ({lang(kg)}): " + ", ".join(inline(k, refs) for k in kg.iter("kwd")))
     for cs in am.iter("copyright-statement"):
         o.append(f"- 著作権 ({lang(cs)}): {''.join(cs.itertext())}")
     for tag in ("abstract", "trans-abstract"):
@@ -198,9 +198,11 @@ def main():
                     o.append((f"{k}. " if ordered else "- ") + inline(it.find("p"), refs))
                 o.append("")
             elif c.tag == "fig":
-                g = c.find("graphic")
                 o.append(f"**[図 {c.get('id')}] {c.findtext('label')}** {inline(c.find('caption/p'), refs)}")
-                o.append(f"  画像: `{img(g.get(XLINK))}`")
+                # 2枚組の図 (「a.」「b.」) は画像が2枚ある．1枚目しか出さないと
+                # 検証役が「半分しか載っていない」と誤解する (19(2):95 の Fig. 8)
+                for g in c.findall("graphic"):
+                    o.append(f"  画像: `{img(g.get(XLINK))}`")
                 o.append("")
             elif c.tag == "disp-formula":
                 o.append(f"**[式 {c.get('id')}] {c.findtext('label') or '(番号なし)'}**")
@@ -221,7 +223,11 @@ def main():
     back = r.find("back")
     if back.find("ack") is not None:
         o += ["## 謝辞", ""] + [inline(p, refs) for p in back.find("ack").iter("p")] + [""]
-    o += ["## 引用文献 (元の文と，分解した結果)", ""]
+    # 見出しは XML の <ref-list><title> をそのまま出す．固定の「引用文献」だと，
+    # 紙面が「References」の論文で検証役が「見出しが違う」と誤解する (18(1):31)
+    rl = r.find(".//ref-list")
+    rt = (rl.findtext("title") if rl is not None else None) or "引用文献"
+    o += [f"## {rt} (元の文と，分解した結果)", ""]
     for ref in back.iter("ref"):
         text, parts = ref_summary(ref)
         o.append(f"- **{ref.get('id')}** {text}")

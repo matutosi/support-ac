@@ -757,15 +757,19 @@ def link_formulas(text, floats):
     """「式(1)」「式1」「(1)式」を別行立ての式へのリンクにする．
 
     欧文の論文は「Eq. (1)」「Eqs. 1 and 2」と書くので，それも受ける (16(2):103)．
+    綴りを略さず「equation (2)」と書く号もある (20(1):65)．
     番号だけの「(1)」は，引用の番号や注の番号と紛れるのでリンクしない．"""
     def rep(m):
-        num = m.group(2) or m.group(3) or m.group(4)
+        num = m.group("a") or m.group("b") or m.group("c") or m.group("d")
         key = "E" + num
         if key not in floats:
             return m.group(0)
         return f"\x05{key}\x02{m.group(0)}\x03"
-    return re.sub(r"(式\s*[（(]?(\d+)[)）]?|[（(](\d+)[)）]\s*式"
-                  r"|Eqs?\s*\.?\s*[（(]?(\d+)[)）]?)", rep, text)
+    # 括弧は開きと閉じをそろえて見る．「(calculated by equation 2)」の外側の閉じ括弧まで
+    # リンクに取り込まないため
+    return re.sub(r"(式\s*[（(]?(?P<a>\d+)[)）]?|[（(](?P<b>\d+)[)）]\s*式"
+                  r"|(?:Eqs?\s*\.?|[Ee]quations?)\s*"
+                  r"(?:[（(](?P<c>\d+)[)）]|(?P<d>\d+)))", rep, text)
 
 
 def para_xml(text, refs, floats, where):

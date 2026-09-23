@@ -143,7 +143,7 @@ def tag_ja_name(name):
 # 点の無いイニシャルは，後ろが区切り (& / and / , / 行末) のときだけ認める
 # イニシャルの前に空白が入る原文もある (「Krummel, J .P.」．16(2):103 の B16)
 # 世代を表す呼称が続くこともある (「Webb, T III.」．18(1):31 の B14)
-EN_NAME = re.compile(r"([^,&]+?),\s*((?:[A-Z][a-zà-ÿ]?\s?\.\s?-?\s?)+(?:\s*(?:Jr|Sr|I{1,3}|IV|V)\.?)?"
+EN_NAME = re.compile(r"([^,&]+?),\s*((?:[A-Z][a-zà-ÿ]?(?:\s*-\s*[A-Z][a-zà-ÿ]?)?\s?\.\s?-?\s?)+(?:\s*(?:Jr|Sr|I{1,3}|IV|V)\.?)?"
                      r"|[A-Z][a-zà-ÿ]?\s+(?:Jr|Sr|I{1,3}|IV|V)\.?"
                      r"|[A-Z][a-zà-ÿ]?(?=\s*(?:&|and\b|,|$)))")
 
@@ -1328,7 +1328,15 @@ def build_front(meta, prof, abstract_ja, refs, floats):
 COUNTRIES = {"JP": ("日本", "Japan"), "NP": ("ネパール", "Nepal"), "US": ("アメリカ合衆国", "USA"),
              "GB": ("イギリス", "UK"), "CN": ("中国", "China"), "KR": ("韓国", "Korea"),
              "RU": ("ロシア", "Russia"), "DE": ("ドイツ", "Germany"), "FR": ("フランス", "France"),
-             "AU": ("オーストラリア", "Australia"), "TW": ("台湾", "Taiwan")}
+             "AU": ("オーストラリア", "Australia"), "TW": ("台湾", "Taiwan"),
+             "PH": ("フィリピン", "Philippines"), "TH": ("タイ", "Thailand"),
+             "ID": ("インドネシア", "Indonesia"), "MY": ("マレーシア", "Malaysia"),
+             "VN": ("ベトナム", "Viet Nam"), "IN": ("インド", "India"),
+             "CA": ("カナダ", "Canada"), "NZ": ("ニュージーランド", "New Zealand"),
+             "BR": ("ブラジル", "Brazil"), "MN": ("モンゴル", "Mongolia"),
+             "NL": ("オランダ", "Netherlands"), "CH": ("スイス", "Switzerland"),
+             "AT": ("オーストリア", "Austria"), "SE": ("スウェーデン", "Sweden"),
+             "ES": ("スペイン", "Spain"), "IT": ("イタリア", "Italy")}
 
 
 def country_name(code, lang):

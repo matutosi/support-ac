@@ -558,9 +558,11 @@ class Ref:
             pre = rest[m.end("src"):m.start("vol")]
             pos = m.end("vol")
             bold = pre.endswith("**") and rest[pos:pos + 2] == "**"
-            if bold:                # 巻を太字で組む雑誌 (19(1):25)．太字のまま <volume> に入れる
+            if bold:                # 巻を太字で組む雑誌 (19(1):25)．`**` は印なので落とす
+                # <volume> は #PCDATA なので <bold> を入れると DTD 違反になる (20(2):71)．
+                # 太さは体裁で，文字は変わらないので印だけ外す
                 pre, pos = pre[:-2], pos + 2
-                s += esc(pre) + f"<volume><bold>{g('vol')}</bold></volume>"
+                s += esc(pre) + f"<volume>{g('vol')}</volume>"
             else:
                 s += esc(pre) + f"<volume>{g('vol')}</volume>"
         else:                       # 巻が無く号だけの雑誌

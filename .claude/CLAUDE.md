@@ -18,6 +18,8 @@ J-STAGE の論文の一覧の取得と，論文 PDF から全文 XML を作る�
 - `form/` … 申込フォーム (`create_form.gs`・`form_questions.csv`)
 - `jstage/` … J-STAGE 関係
   - `list_articles.py` … 号の目次 (`toc`) とサイト用の論文リスト (`html`)
+  - `backup_jstage.py` … 1号分の目次・記事ページ (日本語)・本文 PDF を保存する
+    (`python jstage/backup_jstage.py 13 1`．`--journal`・`--out` も受ける)
   - `pdf_to_jstage_xml.md` … PDF を J-STAGE 用の XML にする方法の調査
   - `requirements.txt` … J-STAGE 関係の依存 (直下のものとは分けてある)
   - `work/<巻>_<開始ページ>/` … スキルの作業ディレクトリ (追跡しない)．論文の PDF もこの中に置く．

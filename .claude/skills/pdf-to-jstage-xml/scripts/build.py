@@ -120,7 +120,8 @@ def tag_ja_name(name):
     if re.fullmatch(r"[\s　]*(ほか|他)[\s　]*\d+[\s　]*名[\s　．.，,・]*", name):
         return esc(name)
     suffix = ""
-    m = re.match(r"^(.*?)(編|監修|ほか編|ほか)$", name)
+    # 「国立天文台（編）」のように括弧に入れて書くこともある (20(2):119 の B7)
+    m = re.match(r"^(.*?)([（(]?\s*(?:編著|編|監修|ほか編|ほか)\s*[）)]?)$", name)
     if m and m.group(1).strip():
         core = m.group(1)
         name = core.rstrip()
@@ -151,7 +152,7 @@ EN_NAME = re.compile(r"(?P<sur>[^,&]+?)(?P<sep>,\s*|(?<=[a-zà-ÿ])[.．]\s*)(?P
 # 並びの途中に，読点を落とした「Li Y.」の形が混ざることがある
 # (「Nakamura, T., Go, T., Li Y. & Hayashi, I.」．19(1):55 の B4)．
 # 区切りに挟まれた所でだけ見るので，題名の語を姓名と取り違えることはない
-NAME_NO_COMMA = re.compile(r"(?P<sur>[A-Z][A-Za-z'\u2019\-]+)[ 　]"
+NAME_NO_COMMA = re.compile(r"(?P<sur>[A-Z\u00c0-\u00de][A-Za-z\u00c0-\u00de\u00df-\u00ff'\u2019\-]+)[ 　]"
                            r"(?P<given>(?:[A-Z]\s*\.?\s*){1,3})(?=\s*(?:&|＆|and\b|[,，]|$))")
 
 
@@ -757,14 +758,16 @@ def link_floats(text, floats):
     def rep(m):
         kind = m.group(1)
         out = one(kind, m.group(3), m.group(1) + m.group(2) + m.group(3))
-        for mm in re.finditer(r"(\s*(?:[，,、]|and|&|＆)\s*)(\d+)", m.group(4)):
+        for mm in re.finditer(r"(\s*(?:[，,、]|and|&|＆|[-–−~〜～])\s*)(\d+)", m.group(4)):
             out += mm.group(1) + one(kind, mm.group(2), mm.group(2))
         return out
     return re.sub(r"(図|表|Figs\.|Fig\.|Figures|Figure|Figs|Fig"
                   r"|Tables|Table|Tabs\.|Tab\.)(\s*)(\d+)"
                   # 「Fig. 4, 1a」の「1a」のように英字が続くものは番号の続きではない
                   # (Fig. 4 の中の群落 1 の下位単位 a を指す．17(2):55)
-                  r"((?:\s*(?:[，,、]|and|&|＆)\s*\d+(?![\d.A-Za-z]))*)", rep, text)
+                  # 「Table 1-4」「図1〜3」のように範囲で引くこともある (20(2):119)．
+                  # 終わりの番号もリンクしないと，途中の図表が参照なしになる
+                  r"((?:\s*(?:[，,、]|and|&|＆|[-–−~〜～])\s*\d+(?![\d.A-Za-z]))*)", rep, text)
 
 
 SEC_NUM = re.compile(r"^[\s\u3000]*(?:[0-9０-９]+|[IVXivx]+)[\s\u3000]*[．.、，,:：]?[\s\u3000]*")

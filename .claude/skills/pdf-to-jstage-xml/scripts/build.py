@@ -20,6 +20,7 @@ body.md の書き方は SKILL.md の「body.md の書式」を見る．
 import argparse
 import html
 import re
+import unicodedata
 import sys
 import zipfile
 from pathlib import Path
@@ -747,9 +748,20 @@ def link_floats(text, floats):
 
     1990 年代の号のように，和文の中で「Fig. 1」「Table 1」と英語で呼ぶ論文もある．
     複数形 (「Figs. 3 and 4」「Tables 1, 2」) も，「and」でつないだ2つ目以降もリンクする．
+    **まず枠に書いた呼び名で引く**．「付表1」と「Table 1」のように番号が重なる論文があり，
+    番号だけで引くと取り違える (20(2):97)．「Photo 1」「写真1」もこれで引ける．
     """
+    # 呼び名 → 枠の id (空白と全角半角をならす)
+    by_label = {}
+    if isinstance(floats, dict):
+        for fid, lab in floats.items():
+            if lab:
+                by_label.setdefault(re.sub(r"[\s　.．]", "", unicodedata.normalize("NFKC", lab)).lower(), fid)
+
     def one(kind, num, shown):
-        key = ("F" if kind == "図" or kind.startswith("Fig") else "T") + num   # Fig./Figure/図 → F
+        key = by_label.get(re.sub(r"[\s　.．]", "", unicodedata.normalize("NFKC", kind + num)).lower())
+        if key is None:      # 呼び名で引けないときは番号で引く (図/Fig. → F，表/Table → T)
+            key = ("F" if kind in ("図", "写真") or kind.startswith(("Fig", "Photo")) else "T") + num
         if key not in floats:
             REPORT.append(f"本文の {kind}{num} に対応する図表が無い")
             return shown
@@ -761,7 +773,7 @@ def link_floats(text, floats):
         for mm in re.finditer(r"(\s*(?:[，,、]|and|&|＆|[-–−~〜～])\s*)(\d+)", m.group(4)):
             out += mm.group(1) + one(kind, mm.group(2), mm.group(2))
         return out
-    return re.sub(r"(図|表|Figs\.|Fig\.|Figures|Figure|Figs|Fig"
+    return re.sub(r"(付表|付図|写真|Photos|Photo|図|表|Figs\.|Fig\.|Figures|Figure|Figs|Fig"
                   r"|Tables|Table|Tabs\.|Tab\.)(\s*)(\d+)"
                   # 「Fig. 4, 1a」の「1a」のように英字が続くものは番号の続きではない
                   # (Fig. 4 の中の群落 1 の下位単位 a を指す．17(2):55)
@@ -898,7 +910,8 @@ def main():
             main_blocks.append(b)
 
     refs = [Ref(i + 1, t) for i, t in enumerate(ref_lines)]
-    floats = {b[1] for b in main_blocks if b[0] in ("fig", "table", "formula")}
+    # 番号だけでなく，枠に書いた呼び名 (「付表1」「Photo 1」) でも引けるように対応表にする
+    floats = {b[1]: b[2] for b in main_blocks if b[0] in ("fig", "table", "formula")}
     # 記事識別子は J-STAGE の既存のもの (meta.yaml の article_id) を使う．無ければ「巻_開始ページ」
     art_id = str(meta.get("article_id") or f"{meta['volume']}_{meta['fpage']}")
     out_dir = work / manifest.OUT

@@ -253,7 +253,9 @@ def tag_en_names_given_first(s):
 # 年は「1996．」のほか，古い号では「1971-78．」「1979-80．」のような範囲で書かれることがある
 # 年のあとは「1965．」が普通だが，「今井　努 1965 西日本における…」のように点の無い号もある
 YEAR = re.compile(r"^(?P<auth>.+?)\s*[（(]?(?P<year>(?:1[89]|20)\d{2})(?P<suf>[a-z]?)"
-                  r"(?:\s*[-–−~〜]\s*\d{2,4})?[)）]?\s*(?:[.．]\s*|\s+)(?P<rest>.*)$")
+                  # 年のあとが読点の原文もある (「Yoshioka, K. 1966, Development…」．20(1):43 の B44)．
+                  # 受けないと題名の中の西暦 (1929) を発行年と取り違える
+                  r"(?:\s*[-–−~〜]\s*\d{2,4})?[)）]?\s*(?:[.．,，]\s*|\s+)(?P<rest>.*)$")
 JOURNAL_TAIL = re.compile(
     # 誌名は *斜体* で囲まれていれば中に「.」があってもよい (J. Sci. Hiroshima Univ. など)
     # 誌名と巻の間は，読点のほか「Journal of Ecology. 19 : 95-99.」のように
@@ -423,7 +425,9 @@ class Ref:
             self.xml = inline(esc(t))
             return
         self.year = m.group("year") + m.group("suf")
-        auth = m.group("auth")
+        # 印にしない「*」の逃がし (「吉良竜夫\*1948」) は著者名では戻しておく．
+        # 著者名は inline を通らないので，逆斜線がそのまま XML に出てしまう (20(1):43 の B11)
+        auth = m.group("auth").replace("\\*", "*")
         if self.lang == "en":
             tagged, names = tag_en_authors(auth)
             if tagged is None:  # 団体名など

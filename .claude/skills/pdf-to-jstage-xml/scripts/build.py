@@ -81,6 +81,17 @@ def split_ja_names(auth):
     ただし人の名前にも団体の字が入る (「市川浩一郎」の「市」)．**次の部分が団体の字で終わるときだけ**
     つなぐことで，人の名前を団体と取り違えないようにする (13(2):59 の文献 B8)．
     """
+    # 「土壌標準分析・測定法委員会（編）」のように，団体名そのものに「・」が入ることがある
+    # (20(1):31 の B1)．全体が団体の字で終わり，人名らしい部分 (空白を含むか 4 字以下) が
+    # 1つも無いときは，分けずに丸ごと1つの団体名とみなす
+    whole = re.sub(r"[\s　]*[（(]?\s*(編著|編|監修)\s*[）)]?[\s　]*$", "", auth.strip())
+    pieces = [x.strip() for x in whole.split("・") if x.strip()]
+    # ただし「北海道千歳市・たくぎん総合研究所」のように，前の部分がそれだけで団体として
+    # 完結しているときは，2つの団体なので分ける (18(2):107 の B6)
+    if (len(pieces) > 1 and ORG_END.search(whole)
+            and not any(re.search(r"[\s　]", x) or len(x) <= 4 for x in pieces)
+            and not any(ORG_END.search(x) for x in pieces[:-1])):
+        return [(0, len(auth))]
     parts, pos = [], 0
     for part in re.split(r"(・)", auth):
         if part != "・" and part.strip():

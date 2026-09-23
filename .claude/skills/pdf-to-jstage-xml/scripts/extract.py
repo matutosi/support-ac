@@ -645,7 +645,7 @@ def main():
     if body_path.exists() and not args.force:
         # AI が手で直した body.md (組んだ表など) を消さない
         body_path = out / "body.new.md"
-        print("body.md は既にあるので上書きしない (body.new.md に書いた．AI が手で直した所を移してから置き換える)")
+        print("body.md は既にあるので上書きしない (body.new.md に書いた．AI が手で直したところを移してから置き換える)")
     body_path.write_text("\n".join(md), encoding="utf-8")
     (out / "floats.txt").write_text("\n".join(floats_txt), encoding="utf-8")
     (out / "page1.txt").write_text("\n".join(page1_txt), encoding="utf-8")

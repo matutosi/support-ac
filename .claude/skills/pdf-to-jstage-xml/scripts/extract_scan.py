@@ -22,7 +22,7 @@
     floats.txt    図表の枠の中の行 (表を組むときに見る)
     pages/        ページ画像 (照合用．OCR は細かい字が読めないので既定 150dpi)
     figs/・tables/ 図・表の画像 (キャプションは入れない)
-    report.txt    自動で判断したことと，確かめる所の一覧
+    report.txt    自動で判断したことと，確かめるところの一覧
 """
 import argparse
 import collections
@@ -440,7 +440,7 @@ def main():
                     x0, x1 = col_x0 - 8, min(col_x1 + 8, mid - 2)
                 else:
                     x0, x1 = max(col_x0 - 8, mid + 2), col_x1 + 8
-                # 図はキャプションが下，表は上にあるので，反対側へ白い所まで伸ばす
+                # 図はキャプションが下，表は上にあるので，反対側へ白いところまで伸ばす
                 clip = (pymupdf.Rect(x0, top, x1, cap_r.y0 - 3) if kind == "fig"
                         else pymupdf.Rect(x0, cap_r.y1 + 3, x1, bottom)) & page.rect
                 name = f"{kind}{num}.png"
@@ -483,7 +483,7 @@ def main():
                         floats_txt.append(f"p{pno} {r['rect'].x0:.0f},{r['rect'].y0:.0f} | {t}")
                     continue
                 if not started:
-                    # 本文は，段に分かれた所の最初の大見出し (「はじめに」) から始まる．
+                    # 本文は，段に分かれたところの最初の大見出し (「はじめに」) から始まる．
                     # それより上 (題名・著者・英文要旨) は page1.txt へ
                     if kind in ("head", "head2") and r["col"] != "全幅":
                         started = True

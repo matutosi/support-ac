@@ -50,7 +50,7 @@ def fetch_dtd(url, tries=4):
     raise SystemExit(
         f"DTD を取れなかった: {url} ({last})\n"
         "  ネットワークが J-STAGE に出られない環境かもしれない (串やプロキシの遮断)．\n"
-        f"  出られる所で一度 validate.py を走らせ，できた {DTD_DIR} をそのまま持ち込めば，\n"
+        f"  出られるところで一度 validate.py を走らせ，できた {DTD_DIR} をそのまま持ち込めば，\n"
         "  以後は取得せずに検証できる (dtd/ は git では追跡しない)．")
 
 

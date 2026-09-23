@@ -201,12 +201,19 @@ def tag_en_authors(auth):
     # (18(2):99 の B17)．末尾に限るのは，題名の語を名と読まないため
     tail = re.match(r"^(?P<lead>\s*(?:&|＆|and\s|,\s)\s*)(?P<sur>[A-Z][A-Za-z'\u2019\-]+)\s*,\s*"
                     r"(?P<given>[A-Z][A-Za-z\u00e0-\u00ff]*(?:-[A-Za-z]+)*)\s*$", auth[pos:])
+    # 並びの最後の著者に名がまったく無い原文もある (「& Lepart.」．20(2):83 の B14)
+    if names and not tail:
+        tail = re.match(r"^(?P<lead>\s*(?:&|＆|and\s)\s*)(?P<sur>[A-Z][A-Za-z'\u2019\-]+)"
+                        r"(?P<given>)(?P<trail>\s*[.．]?\s*)$", auth[pos:])
     if names and tail:
         out[-1] = out[-1] if out else ""
+        giv = (f', <given-names>{esc(tail.group("given"))}</given-names>'
+               if tail.group("given") else "")     # 名が無いときは姓だけ
         out.append(esc(tail.group("lead")) +
                    f'<string-name name-style="western" xml:lang="en">'
-                   f'<surname>{esc(tail.group("sur"))}</surname>, '
-                   f'<given-names>{esc(tail.group("given"))}</given-names></string-name>')
+                   f'<surname>{esc(tail.group("sur"))}</surname>{giv}</string-name>'
+                   + esc(tail.groupdict().get("trail") or "")
+                   + esc(auth[pos:][tail.end():]))
         names.append(tail.group("sur"))
     else:
         tail_xml, tail_names = tag_gap(auth[pos:])   # 末尾にも読点なしの名前が来る

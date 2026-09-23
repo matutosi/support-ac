@@ -319,7 +319,12 @@ JOURNAL_TAIL = re.compile(
 # (「In: 書名．副題．(ed. H. Dierschke), pp. 21-39. J. Cramer, Vaduz.」．17(1):1・17(1):31)
 CHAPTER_EN2 = re.compile(
     r"^(?P<title>.+?\.)\s*(?:In\s*:\s*)?(?P<src>.+?)\s*[（(]\s*eds?\.?(?:\s+by)?\s+(?P<eds>[^)）]*)[)）]"
-    r"\s*[,，]?\s*(?:pp?\s*\.\s*)?(?P<fp>\d+)\s*[-–]\s*(?P<lp>\d+)\s*[.．]\s*(?P<pub>.+)$")
+    r"\s*[,，.．]?\s*(?:pp?\s*\.\s*)?(?P<fp>\d+)\s*[-–]\s*(?P<lp>\d+)\s*[.．]\s*(?P<pub>.+)$")
+# ページを書かない章もある (「章題. In : 書名. (ed. Trabaud, L.) 出版社, 発行地.」．20(1):17 の B22)
+CHAPTER_EN5 = re.compile(
+    r"^(?P<title>.+?[.．])\s*In\s*:\s*(?P<src>.+?)\s*[（(]\s*eds?\.?(?:\s+by)?\s+(?P<eds>[^)）]*)[)）]"
+    r"\s*[,，.．]?\s*(?P<pub>[^.．,，]+(?:[.．]\s*[A-Z][^.．,，]*)?)\s*[,，]\s*"
+    r"(?P<loc>[^.．,，]+?)\s*[.．]?\s*$")
 CHAPTER_JA = re.compile(
     r"^(?P<title>.+?[.．])\s*(?P<eds>[^「」．.]+?)編「(?P<src>[^」]+)」\s*[,，]\s*(?P<fp>\d+)(?:\s*[-–]\s*(?P<lp>\d+))?"
     r"\s*[.．]\s*(?P<pub>[^,，．.]+?)\s*[,，]\s*(?P<loc>[^.．]+?)\s*[.．]\s*$")
@@ -446,7 +451,8 @@ class Ref:
               # 編者を括弧で後置する形を先に見る (CHAPTER_EN だと編者と書名が入れ替わるため)
               else (CHAPTER_EN2_IN.match(rest) or CHAPTER_EN_IN.match(rest)
                     or CHAPTER_EN2.match(rest) or CHAPTER_EN.match(rest)
-                    or CHAPTER_EN3.match(rest) or CHAPTER_EN4.match(rest)))
+                    or CHAPTER_EN3.match(rest) or CHAPTER_EN4.match(rest)
+                    or CHAPTER_EN5.match(rest)))
         if cm:
             self.kind = "book"
             body = self.chapter_xml(rest, cm)

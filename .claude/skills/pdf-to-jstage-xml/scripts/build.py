@@ -143,7 +143,7 @@ def tag_ja_name(name):
 # 点の無いイニシャルは，後ろが区切り (& / and / , / 行末) のときだけ認める
 # イニシャルの前に空白が入る原文もある (「Krummel, J .P.」．16(2):103 の B16)
 # 世代を表す呼称が続くこともある (「Webb, T III.」．18(1):31 の B14)
-EN_NAME = re.compile(r"([^,&]+?),\s*((?:[A-Z][a-zà-ÿ]?(?:\s*-\s*[A-Z][a-zà-ÿ]?)?\s?\.\s?-?\s?)+(?:\s*(?:Jr|Sr|I{1,3}|IV|V)\.?)?"
+EN_NAME = re.compile(r"(?P<sur>[^,&]+?)(?P<sep>,\s*|(?<=[a-zà-ÿ])[.．]\s*)(?P<giv>(?:[A-Z][a-zà-ÿ]?(?:\s*-\s*[A-Z][a-zà-ÿ]?)?\s?\.\s?-?\s?)+(?:\s*(?:Jr|Sr|I{1,3}|IV|V)\.?)?"
                      r"|[A-Z][a-zà-ÿ]?\s+(?:Jr|Sr|I{1,3}|IV|V)\.?"
                      r"|[A-Z][a-zà-ÿ]?(?=\s*(?:&|and\b|,|$)))")
 
@@ -177,20 +177,22 @@ def tag_en_authors(auth):
     """「Batáry, P., Holzschuh, A. & Tscharntke, T.」の各人を string-name で囲む (区切りは残す)．"""
     out, pos, names = [], 0, []
     for m in EN_NAME.finditer(auth):
-        sur = m.group(1).strip()
-        lead = m.group(1)[: len(m.group(1)) - len(m.group(1).lstrip())]
+        sur = m.group("sur").strip()
+        lead = m.group("sur")[: len(m.group("sur")) - len(m.group("sur").lstrip())]
         # 「Nakashizuka, T. and Numata, M.」の「and」は姓の一部ではないので，タグの外へ出す
         conj = re.match(r"^(and\s+|&\s*)(.+)$", sur, re.I)
         if conj:
             lead += conj.group(1)
             sur = conj.group(2)
-        gap, gn = tag_gap(auth[pos:m.start(1)])
+        gap, gn = tag_gap(auth[pos:m.start("sur")])
         names += gn
         out.append(gap + esc(lead))
-        given = m.group(2).rstrip()
-        trail = m.group(2)[len(given):]
-        out.append(f'<string-name name-style="western" xml:lang="en"><surname>{esc(sur)}</surname>, '
-                   f'<given-names>{esc(given)}</given-names></string-name>{esc(trail)}')
+        given = m.group("giv").rstrip()
+        trail = m.group("giv")[len(given):]
+        # 姓と名の間は原文の区切りをそのまま出す (読点を補うと表示の文字が変わる．
+        # 「& Townsend. C.R.」のように句点で区切る原文もある．20(1):17)
+        out.append(f'<string-name name-style="western" xml:lang="en"><surname>{esc(sur)}</surname>'
+                   f'{esc(m.group("sep"))}<given-names>{esc(given)}</given-names></string-name>{esc(trail)}')
         names.append(sur)
         pos = m.end()
     # 並びの最後だけ「& Li, Sek-ha」のようにイニシャルでない名のことがある

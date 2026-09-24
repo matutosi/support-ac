@@ -22,7 +22,7 @@ J-STAGE の論文の一覧の取得と，論文 PDF から全文 XML を作る�
     (`python jstage/backup_jstage.py 13 1`．`--journal`・`--out` も受ける)
   - `pdf_to_jstage_xml.md` … PDF を J-STAGE 用の XML にする方法の調査
   - `requirements.txt` … J-STAGE 関係の依存 (直下のものとは分けてある)
-  - `work/<巻>_<開始ページ>/` … スキルの作業ディレクトリ (追跡しない)．論文の PDF もこの中に置く．
+  - `work/<巻>/<開始ページ>/` … スキルの作業ディレクトリ (追跡しない．開始ページは 3 桁: `13/001/`)．論文の PDF もこの中に置く．
     出力は `out/` (XML と対応表 `manifest.json`) と `<記事識別子>.zip` だけ
 - `.claude/skills/pdf-to-jstage-xml/` … 論文 PDF から J-STAGE の全文 XML を作るスキル (手順は `SKILL.md`)
 - `data/adress.txt` … 植生学会第30回大会の領収書の文面の控え (実際の値なので追跡しない)
@@ -81,6 +81,8 @@ J-STAGE の論文の一覧の取得と，論文 PDF から全文 XML を作る�
   **16〜20 巻もまとめた zip を作り，置き場を `jstage/work/_bundle/<巻>/vegsci.zip` に統一した** (試しの 3 本は `_bundle/trial/`)．
   16〜20 巻は作業ディレクトリが無いので論文ごとの zip から組み，58 本とも CRC で一致．
   名前は J-STAGE の規定 (`{資料コード}.zip`) なので巻の別はフォルダで付ける．`bundle.py`・SKILL.md・vegsci.md も追随．
+  09:54: **`jstage/work/` を `<巻>/<開始ページ3桁>/` に統一した** (`13_1` → `13/001`，16〜20 巻の zip は `16/001/` へ)．
+  41 ディレクトリと 58 zip を移し，1885 ファイル・大きさとも一致．新しいパスから組んだ 15 巻の zip が `_bundle/15` と同一．
 
 - 2026-09-23 18:20 (このセッション，x280-home)
   **リモートの作業ブランチ (20 巻 11 本・`build.py` の修正 12 件) を main に取り込み，ブランチを消した**．

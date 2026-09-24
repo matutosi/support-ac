@@ -14,7 +14,8 @@ argument-hint: "<論文.pdf または記事の URL> [--review none|opus|fable|so
 - Python 3.11 以上と `pip install pymupdf lxml pyyaml` (スクリプトは 3.11 で構文を確かめてある)
 - 対象の雑誌の設定 `journals/<資料コード>.yaml` があること (いまは `vegsci.yaml` だけ)．
   その雑誌にだけ当てはまること (体裁の変遷・実測・注意) は `journals/<資料コード>.md` に置く
-- 作業ディレクトリは `support-ac/jstage/work/<巻>_<開始ページ>/` にする (git では追跡しない)．
+- 作業ディレクトリは `support-ac/jstage/work/<巻>/<開始ページ>/` にする (git では追跡しない)．
+  **開始ページは 3 桁にそろえる** (`13/001/`・`31/193/`．2026-09-24 ユーザ指示．並びが崩れないように)．
   **論文の PDF はその中に `<記事識別子>.pdf` として置く** (外に置かない．`build.py` が既定でここを見る)．
 - **記事識別子は J-STAGE の既存のものを使う**．新しい号は `<巻>_<開始ページ>` の形だが，
   2000 年代より前の号は `<巻>_KJ0000…` のような NII 由来の形のことがあり，登載ではそちらが要る．
@@ -25,7 +26,7 @@ argument-hint: "<論文.pdf または記事の URL> [--review none|opus|fable|so
   「資料コード/巻/号/記事識別子/」の入れ子は zip の中の名前にだけ付け，PDF と図表の画像は元のファイルから
   直接 zip へ入れる (`scripts/manifest.py`)．できあがる形:
   ```
-  jstage/work/<巻>_<開始ページ>/
+  jstage/work/<巻>/<開始ページ>/
     <記事識別子>.pdf          論文の PDF (入力．全文 PDF としてそのまま zip に入る)
     body.md・meta.yaml ほか  下書き (手順 1〜2)
     pages/・figs/・tables/   ページ画像・図表の画像 (手順 1)
@@ -47,7 +48,7 @@ argument-hint: "<論文.pdf または記事の URL> [--review none|opus|fable|so
 | `--review fable` | 「fable で検証」 | 検証役を `model: fable` で起動する |
 | `--review sonnet` | 「sonnet で検証」「安く済ませて」 | 検証役を `model: sonnet` で起動する (**既定**) |
 
-- 例: `/pdf-to-jstage-xml jstage/work/<巻>_<開始ページ>/<記事識別子>.pdf --review fable`
+- 例: `/pdf-to-jstage-xml jstage/work/<巻>/<開始ページ>/<記事識別子>.pdf --review fable`
 - **指定が無いときは `sonnet` で進める (既定．2026-09-19 ユーザ指示)．聞かずに始める**．
   最初の返事で「独立検証は sonnet で行う (既定．`--review` で変えられる)」と一言伝えるだけにし，
   途中の手順 5 で止まって待たない．

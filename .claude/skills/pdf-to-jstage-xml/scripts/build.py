@@ -142,6 +142,9 @@ def tag_ja_name(name):
     parts = re.split(r"[\s　]+", name.strip(), maxsplit=1)
     if len(parts) == 2:
         sur, giv = parts
+        # 「ジェームズ, P.E.」のように姓のあとに読点を打つ原文もある．読点は区切りの側に置く
+        # (21(2):79 の B17．姓に入れていた)
+        sur = sur.rstrip(",，") or sur
         sep = name.strip()[len(sur):len(name.strip()) - len(giv)]
         return (f'<string-name name-style="eastern" xml:lang="ja"><surname>{esc(sur)}</surname>{esc(sep)}'
                 f'<given-names>{esc(giv)}</given-names></string-name>{esc(suffix)}')

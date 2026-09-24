@@ -23,6 +23,7 @@ J-STAGE の論文の一覧の取得と，論文 PDF から全文 XML を作る�
   - `backup_bibj.py` … **J-STAGE の現状を，もとに戻せる書誌 XML (BIB-J) の zip に控える** (全文 XML で更新する前に)．
     保存ずみの記事ページ (`web/`) と J-STAGE の PDF だけから作る
     (`python jstage/backup_bibj.py jstage/work/13/* --out jstage/work/_backup/13`)
+  - `backup.md` … **J-STAGE の現状の控え方** (正は編集登載システムの「記事ダウンロード」，補助が `backup_bibj.py`)
   - `pdf_to_jstage_xml.md` … PDF を J-STAGE 用の XML にする方法の調査
   - `requirements.txt` … J-STAGE 関係の依存 (直下のものとは分けてある)
   - `work/<巻>/<開始ページ>/` … スキルの作業ディレクトリ (追跡しない．開始ページは 3 桁: `13/001/`)．論文の PDF もこの中に置く．
@@ -73,7 +74,8 @@ J-STAGE の論文の一覧の取得と，論文 PDF から全文 XML を作る�
 - **まとめた zip は `jstage/work/_bundle/<巻>/vegsci.zip` に置く** (試しの組は `_bundle/trial/`．2026-09-24 ユーザ指示)．
   zip の名前は J-STAGE の規定 (編集登載編 別紙2) で `{資料コード}.zip` なので，巻の別はフォルダで付ける．
 - **全文 XML で更新する前に，J-STAGE の現状を `jstage/work/_backup/<巻>/` に控える** (2026-09-24 ユーザ指示．
-  もとに戻せるように)．手元の zip (`_bundle`) は J-STAGE 版と違うので控えにならない．`backup_bibj.py` で作る．
+  もとに戻せるように)．手元の zip (`_bundle`) は J-STAGE 版と違うので控えにならない．
+  正は編集登載システムの「記事ダウンロード」(形式「J-STAGE」)，補助が `backup_bibj.py`．手順は `jstage/backup.md`．
 - **引用文献の正は PDF 版，J-STAGE の登録ずみのものは照合用** (2026-09-19)．照合は `build.py` が毎回行う．
   31(2): 193 では 225 件のうち違いは3件で，ウェブ版のハイフン脱落 1 件・アポストロフィの字形 1 件・
   PDF 側の斜体の印 1 件 (直した)．PDF 版は学名の斜体と全角の空白も保てる．

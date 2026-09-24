@@ -868,14 +868,36 @@ def link_formulas(text, floats):
                   r"(?:[（(](?P<c>\d+)[)）]|(?P<d>\d+)))", rep, text)
 
 
+NOLINK = re.compile(r"\{\{-\|(?P<shown>[^{}]+)\}\}")
+
+
+def hold_nolink(text):
+    """{{-|表示}} の中身を退避して，引用・図表・式のリンクにかからないようにする．
+
+    他の論文の表を指す「Relevé No. 29 in Table 2 (Suganuma 1983)」の Table 2 が，
+    この論文の表2 へリンクされてしまう (21(1):1)．表示の文字は原文のまま残す．
+    退避した文字は私用領域の1字に置き換え，put_nolink() で戻す．"""
+    held = []
+    def rep(m):
+        held.append(m.group("shown"))
+        return "\x06" + chr(0xE000 + len(held) - 1)
+    return NOLINK.sub(rep, text), held
+
+
+def put_nolink(text, held):
+    return re.sub("\x06([-])", lambda m: held[ord(m.group(1)) - 0xE000], text)
+
+
 def title_xml(text, floats):
     """見出しの中の図表の参照だけをリンクにする (「(2) …群落（Table 1-(B)）…」の Table 1)．
 
     見出しには群集名の命名者 (「Tohyama et Mochida 1978」) が入ることがあり，
     これを引用と取り違えるので，引用 (著者 年) のリンクは行わない．
     """
-    t = link_floats(text, floats)
+    t, held = hold_nolink(text)
+    t = link_floats(t, floats)
     t = link_appendix(t, floats)
+    t = put_nolink(t, held)
     s = inline(esc(t))
     s = re.sub(r"\x04(F\d+)\x02(.*?)\x03", r'<xref ref-type="fig" rid="\1">\2</xref>', s)
     s = re.sub(r"\x04(T\d+)\x02(.*?)\x03", r'<xref ref-type="table" rid="\1">\2</xref>', s)
@@ -883,10 +905,12 @@ def title_xml(text, floats):
 
 
 def para_xml(text, refs, floats, where):
-    t = link_citations(text, refs, where)
+    t, held = hold_nolink(text)
+    t = link_citations(t, refs, where)
     t = link_floats(t, floats)
     t = link_appendix(t, floats)
     t = link_formulas(t, floats)
+    t = put_nolink(t, held)
     s = inline(esc(t))
     s = re.sub(r"\x01(B\d+)\x02(.*?)\x03", r'<xref ref-type="bibr" rid="\1">\2</xref>', s)
     s = re.sub(r"\x04(F\d+)\x02(.*?)\x03", r'<xref ref-type="fig" rid="\1">\2</xref>', s)

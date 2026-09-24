@@ -44,10 +44,11 @@
 
 **13 巻 (10本) と 14 巻 (13本) の全部** (2026-09-20)．23本とも DTD 妥当・エラー 0 件で，
 独立検証 (sonnet) と `review/triage.md` まで済み．登載用にまとめた zip は
-`jstage/work/_bundle13/vegsci.zip`・`_bundle14/vegsci.zip`．
+`jstage/work/_bundle/13/vegsci.zip`・`_bundle/14/vegsci.zip`
+(2026-09-24 に `_bundle13` などから移した．16〜20 巻も `_bundle/<巻>/` にある)．
 
 **15 巻 (15本) の全部** (2026-09-21)．15本とも **DTD 妥当・J-STAGE の規則エラー 0 件**で，
-独立検証 (sonnet) と `review/triage.md` まで済み．まとめた zip は `jstage/work/_bundle15/vegsci.zip`
+独立検証 (sonnet) と `review/triage.md` まで済み．まとめた zip は `jstage/work/_bundle/15/vegsci.zip`
 (120 ファイル・49MB)．**英文の論文が4本** (15(1):19・61・71，15(2):117・139) と**短報が1本** (15(2):147)．
 残っている「注意」9件は，いずれも**紙面の本文が引用していない文献**か，**紙面が図表を番号で参照していない**
 もので，直していない (各 `triage.md` に理由を書いた)．

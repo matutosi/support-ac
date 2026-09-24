@@ -3,7 +3,11 @@
 使い方:
     python bundle.py <作業ディレクトリ> [<作業ディレクトリ> ...] --out <出力先フォルダ>
 
-    例: python bundle.py jstage/work/31_193 jstage/work/42_59 jstage/work/37_37 --out jstage/work/_bundle
+    例: python bundle.py jstage/work/31_193 jstage/work/42_59 jstage/work/37_37 --out jstage/work/_bundle/trial
+        python bundle.py jstage/work/15_* --out jstage/work/_bundle/15
+
+    出力先は巻ごとに jstage/work/_bundle/<巻>/ とする．zip の名前は {資料コード}.zip に決まっている
+    ので，同じフォルダへ出すと前の zip を上書きする．
 
 出力: <出力先フォルダ>/<資料コード>.zip
     中身は「資料コード/巻/号/記事識別子/」(J-STAGE 操作マニュアル 編集登載編 別紙2)．

@@ -816,8 +816,15 @@ def link_floats(text, floats):
     def rep(m):
         kind = m.group(1)
         out = one(kind, m.group(3), m.group(1) + m.group(2) + m.group(3))
+        prev = int(m.group(3))
         for mm in re.finditer(r"(\s*(?:[，,、]|and|&|＆|[-–−~〜～])\s*)(\d+)", m.group(4)):
+            # 「Fig. 4-2」「Figure 4-1」は範囲でなく図4 の枝番 (21(2):89)．
+            # 終わりの番号が始めの番号以下のときは範囲とみなさず，文字のまま残す
+            if re.fullmatch(r"[-–−~〜～]", mm.group(1)) and int(mm.group(2)) <= prev:
+                out += mm.group(0)
+                continue
             out += mm.group(1) + one(kind, mm.group(2), mm.group(2))
+            prev = int(mm.group(2))
         return out
     return re.sub(r"(付表|付図|写真|Photos|Photo|図|表|Figs\.|Fig\.|Figures|Figure|Figs|Fig"
                   r"|Tables|Table|Tabs\.|Tab\.)(\s*)(\d+)"

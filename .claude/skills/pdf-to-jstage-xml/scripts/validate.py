@@ -129,6 +129,8 @@ def check_rules(doc, xml_path):
     # (21(2):65 の英文要旨．13(2):87・14(1):61・15(2):125 にもあった．DTD では分からない)
     for el in r.xpath("//front//*[not(*)]|//body//*|//back//*"):
         for s in [el.text or "", el.tail or ""]:
+            # URL の中の「~」(「http://www13.ocn.ne.jp/~minnagis/」．22(1):25) は印ではない
+            s = re.sub(r"https?://\S+", "", s)
             for mm in re.finditer(r".{0,20}(\^|\{\{|\}\}|(?<![~〜\d])~(?![~〜]))\S{0,20}", s):
                 errs.append(("エラー", f"印が文字のまま残っている (閉じ忘れ): …{mm.group(0).strip()}…"))
 

@@ -45,7 +45,7 @@ def plain_inline(s):
 
     <publisher-name>・<publisher-loc> は DTD が斜体などを許さない．印をそのまま出すと
     画面に「*」が見え，<italic> にすると DTD 違反になる (13(2):95 の B16)．"""
-    return re.sub(r"</?(?:italic|bold|sup|sub)>", "", inline(s))
+    return re.sub(r"</?(?:italic|bold|sup|sub|underline)>", "", inline(s))
 
 def attr(s):
     return html.escape(str(s), quote=True)
@@ -59,6 +59,8 @@ def inline(s):
     印にしたくない「*」は `\\*` と書く (表の脚注の「*1: …」など．16(1):57)．
     """
     s = s.replace("\\*", "\x00")          # 印にしない「*」をいったん外す
+    # 下線 __d__ (紙面が下線で示すもの．23(1):13 の表題の「(d̲)」，外来種の印など)．斜体の印より先に見る (__*d*__)
+    s = re.sub(r"(?<![A-Za-z0-9_])__(?!\s)(.+?)(?<!\s)__(?![A-Za-z0-9_])", r"<underline>\1</underline>", s)
     # 太字の斜体 ***TPQ*** (22(1):25)．太字の印より先に見る
     s = re.sub(r"\*\*\*(?!\s)(.+?)(?<!\s)\*\*\*", r"<bold><italic>\1</italic></bold>", s)
     s = re.sub(r"\*\*(.+?)\*\*", r"<bold>\1</bold>", s)
@@ -66,9 +68,11 @@ def inline(s):
     # \w は仮名・漢字にも当たるので，和文に接した学名 (「山麓部に*Abies*の…」) が
     # 斜体にならなかった (16(2):115)．ASCII の語の字だけを見る
     s = re.sub(r"(?<![A-Za-z0-9_*])\*(?!\s)(.+?)(?<!\s)\*(?![A-Za-z0-9_*])", r"<italic>\1</italic>", s)
+    # 数字に続く斜体のギリシア文字など (「4*φ*」．23(2):89)．ASCII でない字で始まるときだけ受ける
+    s = re.sub(r"(?<=[0-9])\*(?=[^\x00-\x7f])([^*\s]+?)\*(?![A-Za-z0-9_*])", r"<italic>\1</italic>", s)
     s = re.sub(r"\^([^^\s][^^]*?)\^", r"<sup>\1</sup>", s)
     s = re.sub(r"(?<![~〜])~([^~\s][^~]*?)~(?!~)", r"<sub>\1</sub>", s)
-    s = re.sub(r"(https?://[A-Za-z0-9._~:/?#\[\]@!$&'()*+;=%-]+?)(?=[，。．、）)\s]|$|\.(?:\s|$))",
+    s = re.sub(r"(https?://[A-Za-z0-9._~:/?#\[\]@!$&'()*+;=%-]+?)(?=[，,。．、）)\s]|[^\x00-\x7f]|$|\.(?:\s|$))",
                lambda m: f'<ext-link ext-link-type="uri" xlink:href="{m.group(1)}">{m.group(1)}</ext-link>', s)
     return s.replace("\x00", "*")
 
@@ -315,6 +319,9 @@ JOURNAL_TAIL = re.compile(
     # 「京都教育大学紀要 Ser. B，73: 25-30」のように，誌名のあとに部門 (Ser. B) が
     # 点つきで続く誌名もある (22(1):53 の B32)．下の一般の形は「.」で切れて「B」だけが誌名になる
     r"|[^.．?？\s][^.．?？]*?[ 　](?:Ser|Sect|Sec)[.．]\s*[A-Z\u2160-\u216f0-9]{1,4}"
+    # 欧文で読点のあとに部門と部門名が続く誌名 (「Bulletin of the University of Osaka Prefecture,
+    # Ser. B, Agriculture and Life Science, **40** : …」．23(1):55 の B21)
+    r"|[^.．?？\s][^.．?？]*?[,，]\s*(?:Ser|Sect|Sec)[.．]\s*[A-Z\u2160-\u216f0-9]{1,4}(?:\s*[,，]\s*[A-Z][^.．?？,，:：]*)?"
     # 題名が「?」で終わるときは，そこが題名の終わり (「Do sand dunes have seed banks? The Michigan
     # Botanist, 23: …」．22(2):135 の B24・22(2):147 の B4)．誌名は「?」をまたがない
     r"|[^.．?？\s][^.．?？]*?)(?:\s*[.．,，]\s*|\s+)"
@@ -322,7 +329,9 @@ JOURNAL_TAIL = re.compile(
     # のような範囲や，「Suppl. 1」のような別冊の言い方もある．
     # 巻を立てず号だけの雑誌もある (「フロラ栃木，(3)：1-10」．植生学会誌 13(2) の B3)
     # 紙面が巻を太字で組む雑誌があり，body.md も原文どおり **75** と書く (19(1):25 の B11)
-    r"(?:\*{0,2}(?P<vol>(?:Suppl\.?\s*|Spec\.?\s*|[Nn]o\s*[.．]\s*)?[A-Za-z]?\d+(?:\s*[-–−/／]\s*\d+)?[A-Za-z]?(?:[ 　][A-Z][-–−]\d+)?)"
+    # 合併号を太字で「**7, 8**」とまとめた巻もある (23(2):119 の B45)．読点で続くのは太字の中だけに限る
+    # (「誌名, 巻, 号: ページ」の号を巻に取り込まないため)
+    r"(?:\*{0,2}(?P<vol>(?:Suppl\.?\s*|Spec\.?\s*|[Nn]o\s*[.．]\s*)?[A-Za-z]?\d+(?:\s*[-–−/／]\s*\d+|[,，]\s*\d+(?=\*\*))?[A-Za-z]?(?:[ 　][A-Z][-–−]\d+)?)"
     # 巻と号をハイフンでつなぐ書き方もある (「土木技術資料, 41-(7)：32-37」．18(1):1 の B5)
     r"\*{0,2}(?:\s*[-–−]?\s*[（(](?P<iss>[^)）]+)[)）])?|[（(](?P<iss2>[^)）]+)[)）])"
     # ページは「14：p.151．」のように p. が付くこともある (1ページだけの記事)
@@ -349,11 +358,11 @@ JOURNAL_TAIL = re.compile(
 # 編者を書名のあとに括弧で置く書き方もある
 # (「In: 書名．副題．(ed. H. Dierschke), pp. 21-39. J. Cramer, Vaduz.」．17(1):1・17(1):31)
 CHAPTER_EN2 = re.compile(
-    r"^(?P<title>.+?\.)\s*(?:In\s*:\s*)?(?P<src>.+?)\s*[（(]\s*eds?\.?(?:\s+by)?\s+(?P<eds>[^)）]*)[)）]"
+    r"^(?P<title>.+?\.)\s*(?:In\s*:\s*)?(?P<src>.+?)\s*[（(]\s*eds?\.?(?:\s+by)?\s+(?P<eds>(?:[^()（）]|[（(][^()（）]*[)）])*)[)）]"
     r"\s*[,，.．]?\s*(?:pp?\s*\.\s*)?(?P<fp>\d+)\s*[-–]\s*(?P<lp>\d+)\s*[.．]\s*(?P<pub>.+)$")
 # ページを書かない章もある (「章題. In : 書名. (ed. Trabaud, L.) 出版社, 発行地.」．20(1):17 の B22)
 CHAPTER_EN5 = re.compile(
-    r"^(?P<title>.+?[.．])\s*In\s*:\s*(?P<src>.+?)\s*[（(]\s*eds?\.?(?:\s+by)?\s+(?P<eds>[^)）]*)[)）]"
+    r"^(?P<title>.+?[.．])\s*In\s*:\s*(?P<src>.+?)\s*[（(]\s*eds?\.?(?:\s+by)?\s+(?P<eds>(?:[^()（）]|[（(][^()（）]*[)）])*)[)）]"
     r"\s*[,，.．]?\s*(?P<pub>[^.．,，]+(?:[.．]\s*[A-Z][^.．,，]*)?)\s*[,，]\s*"
     r"(?P<loc>[^.．,，]+?)\s*[.．]?\s*$")
 CHAPTER_JA = re.compile(
@@ -413,7 +422,7 @@ CHAPTER_EN_IN = re.compile(CHAPTER_EN.pattern.replace(r"(?:In\s*:\s*)?", r"In\s*
 # (「章題. In : 書名 (ed. A. Miyawaki), 発行者. 東京. pp. 55-60 (付記).」．19(1):11 の B9・B15)
 CHAPTER_EN4 = re.compile(
     r"^(?P<title>.+?[.．])\s*In\s*:?\s*(?P<src>.+?)\s*[（(]\s*[Ee]ds?\.?(?:\s+by)?\s+"
-    r"(?P<eds>[^)）]*)[)）]\s*[,，.．]?\s*(?P<pub>.+?)\s*[.．]\s*(?P<loc>[^.．,，]+?)\s*[.．]\s*"
+    r"(?P<eds>(?:[^()（）]|[（(][^()（）]*[)）])*)[)）]\s*[,，.．]?\s*(?P<pub>.+?)\s*[.．]\s*(?P<loc>[^.．,，]+?)\s*[.．]\s*"
     r"pp?\s*[.．]\s*(?P<fp>\d+)\s*[-–−]\s*(?P<lp>\d+)\s*(?:[（(][^)）]*[)）])?\s*[.．]?\s*$")
 CHAPTER_EN3 = re.compile(
     r"^(?P<title>.+?[.．])\s*In\s*:\s*(?P<src>.+?)\s*[,，]\s*(?:pp?\s*[.．]\s*)?"
@@ -460,6 +469,12 @@ class Ref:
         # 印にしない「*」の逃がし (「吉良竜夫\*1948」) は著者名では戻しておく．
         # 著者名は inline を通らないので，逆斜線がそのまま XML に出てしまう (20(1):43 の B11)
         auth = m.group("auth").replace("\\*", "*")
+        # 文献の先頭の「*」(「直接参照できなかった」の印．23(1):1・23(2):137) は著者名の外に出す．
+        # 名前に入ると「吉良 1945a」の引用が当たらず，<surname>*吉良竜夫</surname> になる
+        mark = ""
+        mm = re.match(r"[*＊]+\s*", auth)
+        if mm:
+            mark, auth = mm.group(0), auth[mm.end():]
         self.auth = auth          # 著者の部分そのまま (手で指定するリンクの照合に使う)
         if self.lang == "en":
             tagged, names = tag_en_authors(auth)
@@ -477,7 +492,7 @@ class Ref:
             parts.append(esc(auth[pos:]))
             tagged = "".join(parts)
         self.names = names
-        head = f'<person-group person-group-type="author">{tagged}</person-group>'
+        head = esc(mark) + f'<person-group person-group-type="author">{tagged}</person-group>'
         year_part = t[m.end("auth"):m.start("rest")]
         year_xml = esc(year_part).replace(self.year, f"<year>{self.year}</year>", 1)
         rest = m.group("rest")
@@ -892,7 +907,7 @@ def link_formulas(text, floats):
     # リンクに取り込まないため
     # 「（式4）」の外側の閉じ括弧を取り込まないよう，開き括弧があるときだけ閉じ括弧を取る (22(1):25)
     return re.sub(r"(式\s*(?:[（(](?P<a>\d+)[)）]|(?P<a2>\d+))|[（(](?P<b>\d+)[)）]\s*式"
-                  r"|(?:Eqs?\s*\.?|[Ee]quations?)\s*"
+                  r"|(?:Eqs?\s*\.?|[Ee]quations?|[Ff]ormulae?)\s*"
                   r"(?:[（(](?P<c>\d+)[)）]|(?P<d>\d+)))", rep, text)
 
 
@@ -1003,7 +1018,7 @@ def main():
     blocks = parse_body(work / "body.md")
 
     # 特別な節を切り出す
-    abstract_ja, ack, ref_lines, main_blocks = [], [], [], []
+    abstract_ja, ack, ref_lines, ref_notes, main_blocks = [], [], [], [], []
     mode = "body"
     for b in blocks:
         if b[0] == "h" and b[1] == 1:
@@ -1022,7 +1037,12 @@ def main():
         elif mode == "ack" and b[0] == "p":
             ack.append(b[1])
         elif mode == "refs" and b[0] == "p":
-            ref_lines.append(b[1])
+            # 文献一覧の注記の行 (「（*印を付したものは直接参照できなかった）」．23(1):1・23(2):137) は
+            # 文献にしない．括弧で始まり年を持たない行
+            if re.match(r"^[（(]", b[1]) and not YEAR.match(b[1]):
+                ref_notes.append(b[1])
+            else:
+                ref_lines.append(b[1])
         elif mode == "body":
             main_blocks.append(b)
 
@@ -1039,7 +1059,7 @@ def main():
     names = GraphicNames(art_id)
     body_xml = build_body(main_blocks, refs, floats, work, names)
     front = build_front(meta, prof, abstract_ja, refs, floats)
-    back = build_back(ack, refs, titles)
+    back = build_back(ack, refs, titles, ref_notes)
     lang = meta.get("lang", "ja")
     xml = (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
@@ -1183,7 +1203,9 @@ def check_refs_text(path, refs):
     doc = etree.parse(str(path), etree.XMLParser(load_dtd=False, no_network=True))
     xs = ["".join(e.itertext()) for e in doc.xpath("//ref/mixed-citation")]
     for r, x in zip(refs, xs):
-        if r.text.replace("*", "") != x:
+        # 斜体・太字・下線の印を外し，印にしない「\*」は「*」に戻して比べる
+        src = r.text.replace("\\*", "\x00").replace("*", "").replace("__", "").replace("\x00", "*")
+        if src != x:
             REPORT.append(f"文献の文字が変わった: {r.id} {r.text[:40]} → {x[:40]}")
 
 
@@ -1492,13 +1514,17 @@ def country_name(code, lang):
     return ja if lang == "ja" else en
 
 
-def build_back(ack, refs, titles):
+def build_back(ack, refs, titles, notes=()):
     o = ["<back>"]
     if ack:
         o.append(f"<ack><title>{esc(titles['ack'])}</title>" + "".join(f"<p>{inline(esc(p))}</p>" for p in ack) + "</ack>")
     if refs:
         o.append(f"<ref-list><title>{esc(titles['refs'])}</title>")
         o += [r.to_xml() for r in refs]
+        # 文献一覧の末尾の注記は，入れ子の <ref-list> の段落にする (紙面の並びのまま末尾に出す．
+        # JATS の ref-list は段落を ref より前にしか置けない)
+        if notes:
+            o.append("<ref-list>" + "".join(f"<p>{inline(esc(n))}</p>" for n in notes) + "</ref-list>")
         o.append("</ref-list>")
     o.append("</back>")
     return "\n".join(o)

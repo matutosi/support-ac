@@ -222,7 +222,11 @@ def main():
 
     back = r.find("back")
     if back.find("ack") is not None:
-        o += ["## 謝辞", ""] + [inline(p, refs) for p in back.find("ack").iter("p")] + [""]
+        # 見出しは XML のとおりに出す．「謝辞」と決めて出すと，英文の論文 (ACKNOWLEDGEMENTS) で
+        # 検証役が「見出しが和文に置き換わった」と誤って報告した (22(2):147・23(1):55)
+        t = back.find("ack").find("title")
+        o += [f"## {t.text if t is not None and t.text else '謝辞'}", ""] + \
+             [inline(p, refs) for p in back.find("ack").iter("p")] + [""]
     # 見出しは XML の <ref-list><title> をそのまま出す．固定の「引用文献」だと，
     # 紙面が「References」の論文で検証役が「見出しが違う」と誤解する (18(1):31)
     rl = r.find(".//ref-list")

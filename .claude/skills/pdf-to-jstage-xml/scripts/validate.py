@@ -32,6 +32,14 @@ DTD_MAIN = "JATS-journalpublishing1.dtd"
 NS = {"xlink": "http://www.w3.org/1999/xlink"}
 
 
+# JATS 1.1 の article-type の推奨値
+ARTICLE_TYPES = {"abstract", "addendum", "announcement", "article-commentary", "book-review", "books-received",
+                 "brief-report", "calendar", "case-report", "collection", "correction", "discussion",
+                 "dissertation", "editorial", "in-brief", "introduction", "letter", "meeting-report", "news",
+                 "obituary", "oration", "other", "partial-retraction", "product-review", "rapid-communication",
+                 "reply", "reprint", "research-article", "retraction", "review-article", "translation"}
+
+
 def fetch_dtd(url, tries=4):
     """DTD の一部を取る．404 は None (条件付きで参照されるだけのもの)．
     それ以外の失敗は間を空けて試し直し，最後まで駄目なら止める
@@ -104,6 +112,10 @@ def check_rules(doc, xml_path):
         errs.append(("エラー", "開始ページも論文番号も無い"))
     if r.get("article-type") is None or "要確認" in (r.get("article-type") or ""):
         errs.append(("エラー", "article-type が決まっていない"))
+    elif r.get("article-type") not in ARTICLE_TYPES:
+        # 和名 (「訂正」) を入れても DTD は通るので，ここで見る (23(2):176 の作成役が気づいた)
+        errs.append(("エラー", f"article-type が JATS の値でない: {r.get('article-type')} "
+                              "(journals/<資料コード>.yaml の article_types の type を使う)"))
 
     # 文字数の上限 (メタデータ項目一覧)
     limits = [("front/article-meta/title-group/article-title", 2000, "記事表題"),

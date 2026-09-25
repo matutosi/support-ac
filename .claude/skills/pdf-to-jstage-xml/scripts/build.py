@@ -59,6 +59,8 @@ def inline(s):
     印にしたくない「*」は `\\*` と書く (表の脚注の「*1: …」など．16(1):57)．
     """
     s = s.replace("\\*", "\x00")          # 印にしない「*」をいったん外す
+    # 太字の斜体 ***TPQ*** (22(1):25)．太字の印より先に見る
+    s = re.sub(r"\*\*\*(?!\s)(.+?)(?<!\s)\*\*\*", r"<bold><italic>\1</italic></bold>", s)
     s = re.sub(r"\*\*(.+?)\*\*", r"<bold>\1</bold>", s)
     # 前後の字で区切るのは，語の中の「*」(N*・log*x*) を印と取り違えないため．
     # \w は仮名・漢字にも当たるので，和文に接した学名 (「山麓部に*Abies*の…」) が
@@ -310,7 +312,12 @@ JOURNAL_TAIL = re.compile(
     # 「Trans. ASAE」「J. JASS」のように，略記のあとが頭字語だけの誌名もある
     # (19(1):25 の B13・B24)．頭字語は大文字だけなので，題名の末尾の語とは紛れない
     r"|[A-Z][a-z]{0,7}[.．]\s*[A-Z]{2,6}"
-    r"|[^.．\s][^.．]*?)(?:\s*[.．,，]\s*|\s+)"
+    # 「京都教育大学紀要 Ser. B，73: 25-30」のように，誌名のあとに部門 (Ser. B) が
+    # 点つきで続く誌名もある (22(1):53 の B32)．下の一般の形は「.」で切れて「B」だけが誌名になる
+    r"|[^.．?？\s][^.．?？]*?[ 　](?:Ser|Sect|Sec)[.．]\s*[A-Z\u2160-\u216f0-9]{1,4}"
+    # 題名が「?」で終わるときは，そこが題名の終わり (「Do sand dunes have seed banks? The Michigan
+    # Botanist, 23: …」．22(2):135 の B24・22(2):147 の B4)．誌名は「?」をまたがない
+    r"|[^.．?？\s][^.．?？]*?)(?:\s*[.．,，]\s*|\s+)"
     # 巻は「52-53」「41/42」(合併号．19(1):25 の B11・B22)・「66 A-9」(19(1):43 の B23)
     # のような範囲や，「Suppl. 1」のような別冊の言い方もある．
     # 巻を立てず号だけの雑誌もある (「フロラ栃木，(3)：1-10」．植生学会誌 13(2) の B3)
@@ -734,6 +741,8 @@ def auto_citations(text, refs, where):
         after = text[m.end():m.end() + 3]
         if re.match(r"\s*[)）]?\s*年", after) or re.match(r"\s*[/.]\d", after):  # 「2011 年」「平成4（1992）年」
             continue
+        if re.match(r"\s*(?:k?m|cm|mm)(?![A-Za-z])", text[m.end():m.end() + 4]):  # 標高「1893 m」(22(2):87)
+            continue
         year = m.group(1) + m.group(2)
         between = text[last_end:m.start()] if last_end is not None else None
         cands = by_year.get(year, [])
@@ -807,16 +816,34 @@ def link_floats(text, floats):
     def rep(m):
         kind = m.group(1)
         out = one(kind, m.group(3), m.group(1) + m.group(2) + m.group(3))
-        for mm in re.finditer(r"(\s*(?:[，,、]|and|&|＆|[-–−~〜～])\s*)(\d+)", m.group(4)):
+        rest, prev = m.group(4), int(m.group(3))
+        for mm in re.finditer(r"(\s*(?:[，,、]|and|&|＆|[-–−~〜～])\s*)(\d+)", rest):
+            # 「図6-1」「図6-2」は図6 の枝番で，範囲ではない (22(1):25)．範囲 (Table 1-4) なら
+            # 後ろの番号のほうが大きい．枝番から後ろはそのままの文字で残す
+            if re.fullmatch(r"\s*[-–−]\s*", mm.group(1)) and int(mm.group(2)) <= prev:
+                return out + rest[mm.start():]
             out += mm.group(1) + one(kind, mm.group(2), mm.group(2))
+            prev = int(mm.group(2))
         return out
-    return re.sub(r"(付表|付図|写真|Photos|Photo|図|表|Figs\.|Fig\.|Figures|Figure|Figs|Fig"
+    # 「地表0 cm」「数値地図50 m」「代表」「発表」「公表」の「表」「図」は図表の参照ではない (22(2):135・103)
+    text = re.sub(r"(付表|付図|写真|Photos|Photo|(?<![地代発公])図|(?<![地代発公])表|Figs\.|Fig\.|Figures|Figure|Figs|Fig"
                   r"|Tables|Table|Tabs\.|Tab\.)(\s*)(\d+)"
                   # 「Fig. 4, 1a」の「1a」のように英字が続くものは番号の続きではない
                   # (Fig. 4 の中の群落 1 の下位単位 a を指す．17(2):55)
                   # 「Table 1-4」「図1〜3」のように範囲で引くこともある (20(2):119)．
                   # 終わりの番号もリンクしないと，途中の図表が参照なしになる
                   r"((?:\s*(?:[，,、]|and|&|＆|[-–−~〜～])\s*\d+(?![\d.A-Za-z]))*)", rep, text)
+    # 番号の無い呼び名 (「付表」だけの枠) は，本文の「（付表）」「付表に示した」をその呼び名で引く
+    # (22(1):25・22(2):113)．番号が続くもの (付表1) は上で扱う
+    bare = {}
+    if isinstance(floats, dict):
+        bare = {lab.strip(): fid for fid, lab in floats.items()
+                if lab and lab.strip() and not re.search(r"\d", lab)}
+    if bare:
+        pat = "|".join(map(re.escape, sorted(bare, key=len, reverse=True)))
+        text = re.sub(rf"(?<!\x02)({pat})(?![\s　]*\d)",
+                      lambda m: f"\x04{bare[m.group(1)]}\x02{m.group(1)}\x03", text)
+    return text
 
 
 APPENDIX_REF = re.compile(r"(Appendices|Appendix|付録)(\s*)(\d+)")
@@ -856,14 +883,15 @@ def link_formulas(text, floats):
     綴りを略さず「equation (2)」と書く号もある (20(1):65)．
     番号だけの「(1)」は，引用の番号や注の番号と紛れるのでリンクしない．"""
     def rep(m):
-        num = m.group("a") or m.group("b") or m.group("c") or m.group("d")
+        num = m.group("a") or m.group("a2") or m.group("b") or m.group("c") or m.group("d")
         key = "E" + num
         if key not in floats:
             return m.group(0)
         return f"\x05{key}\x02{m.group(0)}\x03"
     # 括弧は開きと閉じをそろえて見る．「(calculated by equation 2)」の外側の閉じ括弧まで
     # リンクに取り込まないため
-    return re.sub(r"(式\s*[（(]?(?P<a>\d+)[)）]?|[（(](?P<b>\d+)[)）]\s*式"
+    # 「（式4）」の外側の閉じ括弧を取り込まないよう，開き括弧があるときだけ閉じ括弧を取る (22(1):25)
+    return re.sub(r"(式\s*(?:[（(](?P<a>\d+)[)）]|(?P<a2>\d+))|[（(](?P<b>\d+)[)）]\s*式"
                   r"|(?:Eqs?\s*\.?|[Ee]quations?)\s*"
                   r"(?:[（(](?P<c>\d+)[)）]|(?P<d>\d+)))", rep, text)
 
@@ -985,7 +1013,11 @@ def main():
             if mode != "body":
                 titles[mode] = b[2]
                 continue
-        if mode == "abstract" and b[0] == "p":
+        if mode in ("abstract", "ack") and b[0] == "list":
+            # 空行なしで続く「1. …」は箇条書きの塊になる．抄録と謝辞は段落しか持たないので，
+            # 1項目を1段落にする (黙って落とさない．22(2):113)
+            (abstract_ja if mode == "abstract" else ack).extend(x.strip() for x in b[1])
+        elif mode == "abstract" and b[0] == "p":
             abstract_ja.append(b[1])
         elif mode == "ack" and b[0] == "p":
             ack.append(b[1])

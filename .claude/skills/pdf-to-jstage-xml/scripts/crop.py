@@ -56,7 +56,8 @@ def main():
             page.get_pixmap(matrix=m, clip=clip).save(out)
         else:
             page.get_pixmap(dpi=args.dpi, clip=clip).save(out)
-    print(f"p{args.page} {tuple(round(v) for v in clip)} → {out.relative_to(work)}")
+    shown = out.relative_to(work) if out.is_relative_to(work) else out   # 外に書いたときも落ちない
+    print(f"p{args.page} {tuple(round(v) for v in clip)} → {shown}")
 
 
 if __name__ == "__main__":

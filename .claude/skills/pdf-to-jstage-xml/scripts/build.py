@@ -148,6 +148,9 @@ def tag_ja_name(name):
     parts = re.split(r"[\s　]+", name.strip(), maxsplit=1)
     if len(parts) == 2:
         sur, giv = parts
+        # 「ジェームズ, P.E.」のように姓のあとに読点を打つ原文もある．読点は区切りの側に置く
+        # (21(2):79 の B17．姓に入れていた)
+        sur = sur.rstrip(",，") or sur
         sep = name.strip()[len(sur):len(name.strip()) - len(giv)]
         return (f'<string-name name-style="eastern" xml:lang="ja"><surname>{esc(sur)}</surname>{esc(sep)}'
                 f'<given-names>{esc(giv)}</given-names></string-name>{esc(suffix)}')
@@ -324,20 +327,28 @@ JOURNAL_TAIL = re.compile(
     r"|[^.．?？\s][^.．?？]*?[,，]\s*(?:Ser|Sect|Sec)[.．]\s*[A-Z\u2160-\u216f0-9]{1,4}(?:\s*[,，]\s*[A-Z][^.．?？,，:：]*)?"
     # 題名が「?」で終わるときは，そこが題名の終わり (「Do sand dunes have seed banks? The Michigan
     # Botanist, 23: …」．22(2):135 の B24・22(2):147 の B4)．誌名は「?」をまたがない
-    r"|[^.．?？\s][^.．?？]*?)(?:\s*[.．,，]\s*|\s+)"
+    # 略さない誌名のあとの括弧に「.」が入ることがある
+    # (「Journal of Science of the Hiroshima University (Series B, Div. 2), 9：…」．21(1):15 の B38)．
+    # 次の候補は「.」を含めないので，括弧の中の「Div.」で題名が切れていた
+    r"|[^.．?？\s()（）][^.．?？()（）]*?\s*[（(][^)）]*[.．][^)）]*[)）]"
+    # 和文の紀要は誌名のすぐあとに「第9輯」と巻を続けることがある
+    # (「釧路市立郷土博物館紀要第9輯: 27-36．」．21(2):89 の B29．受けないと書籍になる)
+    r"|[^.．?？\s][^.．?？]*?)(?:\s*[.．,，]\s*|\s+|(?=第\d+[輯号巻集]))"
     # 巻は「52-53」「41/42」(合併号．19(1):25 の B11・B22)・「66 A-9」(19(1):43 の B23)
     # のような範囲や，「Suppl. 1」のような別冊の言い方もある．
     # 巻を立てず号だけの雑誌もある (「フロラ栃木，(3)：1-10」．植生学会誌 13(2) の B3)
     # 紙面が巻を太字で組む雑誌があり，body.md も原文どおり **75** と書く (19(1):25 の B11)
     # 合併号を太字で「**7, 8**」とまとめた巻もある (23(2):119 の B45)．読点で続くのは太字の中だけに限る
     # (「誌名, 巻, 号: ページ」の号を巻に取り込まないため)
-    r"(?:\*{0,2}(?P<vol>(?:Suppl\.?\s*|Spec\.?\s*|[Nn]o\s*[.．]\s*)?[A-Za-z]?\d+(?:\s*[-–−/／]\s*\d+|[,，]\s*\d+(?=\*\*))?[A-Za-z]?(?:[ 　][A-Z][-–−]\d+)?)"
+    r"(?:\*{0,2}(?P<vol>第\d+[輯号巻集]|(?:Suppl\.?\s*|Spec\.?\s*|[Nn]o\s*[.．]\s*)?[A-Za-z]?\d+(?:\s*[-–−/／]\s*\d+|[,，]\s*\d+(?=\*\*))?[A-Za-z]?(?:[ 　][A-Z][-–−]\d+)?)"
     # 巻と号をハイフンでつなぐ書き方もある (「土木技術資料, 41-(7)：32-37」．18(1):1 の B5)
     r"\*{0,2}(?:\s*[-–−]?\s*[（(](?P<iss>[^)）]+)[)）])?|[（(](?P<iss2>[^)）]+)[)）])"
     # ページは「14：p.151．」のように p. が付くこともある (1ページだけの記事)
     # 巻とページの間を読点で区切る和文の雑誌もある (「生態学会誌, 42, 241-248.」．19(1):61 の B29)
     # 巻とページの間を「;」で区切る雑誌もある (「Ecology 32 ; 113-118.」．20(1):55 の B20)
-    r"\s*[:：,，;；]\s*(?:p\s*\.\s*)?(?P<fp>[A-Za-z]?\d+)"
+    # 号の閉じ括弧のすぐあとにページが続き，区切りの無い原文もある
+    # (「横国大野外教育研報，（7）25−36．」．21(1):27 の B7．受けないと書籍になる)
+    r"(?:\s*[:：,，;；]\s*|(?<=[)）])[ 　]*)(?:p\s*\.\s*)?(?P<fp>[A-Za-z]?\d+)"
     r"(?:\s*[-–−₋~〜～]\s*(?P<lp>[A-Za-z]?\d+))?"
     # 分載の論文は「9：1-37, 108-127, 195-219, 271-300．」のようにページ範囲を並べる
     # (18(2):107 の B3)．2つめ以降は文字のまま置く (fpage・lpage は先頭の範囲)
@@ -833,7 +844,7 @@ def link_floats(text, floats):
         out = one(kind, m.group(3), m.group(1) + m.group(2) + m.group(3))
         rest, prev = m.group(4), int(m.group(3))
         for mm in re.finditer(r"(\s*(?:[，,、]|and|&|＆|[-–−~〜～])\s*)(\d+)", rest):
-            # 「図6-1」「図6-2」は図6 の枝番で，範囲ではない (22(1):25)．範囲 (Table 1-4) なら
+            # 「図6-1」「図6-2」「Fig. 4-2」は図の枝番で，範囲ではない (22(1):25・21(2):89)．範囲 (Table 1-4) なら
             # 後ろの番号のほうが大きい．枝番から後ろはそのままの文字で残す
             if re.fullmatch(r"\s*[-–−]\s*", mm.group(1)) and int(mm.group(2)) <= prev:
                 return out + rest[mm.start():]
@@ -911,14 +922,36 @@ def link_formulas(text, floats):
                   r"(?:[（(](?P<c>\d+)[)）]|(?P<d>\d+)))", rep, text)
 
 
+NOLINK = re.compile(r"\{\{-\|(?P<shown>[^{}]+)\}\}")
+
+
+def hold_nolink(text):
+    """{{-|表示}} の中身を退避して，引用・図表・式のリンクにかからないようにする．
+
+    他の論文の表を指す「Relevé No. 29 in Table 2 (Suganuma 1983)」の Table 2 が，
+    この論文の表2 へリンクされてしまう (21(1):1)．表示の文字は原文のまま残す．
+    退避した文字は私用領域の1字に置き換え，put_nolink() で戻す．"""
+    held = []
+    def rep(m):
+        held.append(m.group("shown"))
+        return "\x06" + chr(0xE000 + len(held) - 1)
+    return NOLINK.sub(rep, text), held
+
+
+def put_nolink(text, held):
+    return re.sub("\x06([-])", lambda m: held[ord(m.group(1)) - 0xE000], text)
+
+
 def title_xml(text, floats):
     """見出しの中の図表の参照だけをリンクにする (「(2) …群落（Table 1-(B)）…」の Table 1)．
 
     見出しには群集名の命名者 (「Tohyama et Mochida 1978」) が入ることがあり，
     これを引用と取り違えるので，引用 (著者 年) のリンクは行わない．
     """
-    t = link_floats(text, floats)
+    t, held = hold_nolink(text)
+    t = link_floats(t, floats)
     t = link_appendix(t, floats)
+    t = put_nolink(t, held)
     s = inline(esc(t))
     s = re.sub(r"\x04(F\d+)\x02(.*?)\x03", r'<xref ref-type="fig" rid="\1">\2</xref>', s)
     s = re.sub(r"\x04(T\d+)\x02(.*?)\x03", r'<xref ref-type="table" rid="\1">\2</xref>', s)
@@ -926,10 +959,12 @@ def title_xml(text, floats):
 
 
 def para_xml(text, refs, floats, where):
-    t = link_citations(text, refs, where)
+    t, held = hold_nolink(text)
+    t = link_citations(t, refs, where)
     t = link_floats(t, floats)
     t = link_appendix(t, floats)
     t = link_formulas(t, floats)
+    t = put_nolink(t, held)
     s = inline(esc(t))
     s = re.sub(r"\x01(B\d+)\x02(.*?)\x03", r'<xref ref-type="bibr" rid="\1">\2</xref>', s)
     s = re.sub(r"\x04(F\d+)\x02(.*?)\x03", r'<xref ref-type="fig" rid="\1">\2</xref>', s)

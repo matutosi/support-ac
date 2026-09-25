@@ -136,6 +136,16 @@ def check_rules(doc, xml_path):
         if re.search(r"[0-9]", el.text or ""):
             errs.append(("エラー", f"姓に半角数字: {el.text}"))
 
+    # body.md・meta.yaml の印 (^上付き^・~下付き~・{{リンク}}) が閉じられず文字のまま残っていないか．
+    # J-STAGE の登録版の要旨は上付きを「m^2」と書くので，写すと画面に「^2」が出る
+    # (21(2):65 の英文要旨．13(2):87・14(1):61・15(2):125 にもあった．DTD では分からない)
+    for el in r.xpath("//front//*[not(*)]|//body//*|//back//*"):
+        for s in [el.text or "", el.tail or ""]:
+            # URL の中の「~」(「http://www13.ocn.ne.jp/~minnagis/」．22(1):25) は印ではない
+            s = re.sub(r"https?://\S+", "", s)
+            for mm in re.finditer(r".{0,20}(\^|\{\{|\}\}|(?<![~〜\d])~(?![~〜]))\S{0,20}", s):
+                errs.append(("エラー", f"印が文字のまま残っている (閉じ忘れ): …{mm.group(0).strip()}…"))
+
     # 著作権は日英両方か，どちらも無いか
     for tag in ("copyright-statement", "copyright-holder"):
         langs = {e.get("{http://www.w3.org/XML/1998/namespace}lang") for e in r.xpath(f"//permissions/{tag}")}

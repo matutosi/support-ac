@@ -23,8 +23,8 @@ def draw_name(p, x, y, name, affil, dinner=0, workshop=0, congress_color="green"
     draw_string(p, x + 1*mm, y - 10*mm, CONGRESS, font_name=font_name, font_size=14, 
                 color="white", shape="rect", bg_color=congress_color, width=91*mm)
     # 会場・日時
-    draw_string(p, x + 65*mm, y -10*mm, PLACE    , font_name=font_name, font_size=7, color="white")
-    draw_string(p, x + 65*mm, y - 6*mm, CONG_DATE, font_name=font_name, font_size=7, color="white")
+    draw_string(p, x + 63*mm, y -10*mm, PLACE    , font_name=font_name, font_size=7, color="white")
+    draw_string(p, x + 63*mm, y - 6*mm, CONG_DATE, font_name=font_name, font_size=7, color="white")
     # 所属・氏名欄
     draw_string(p, x + 2*mm, y - 15*mm, SHOZOKU, font_name=font_name, font_size=6)
     draw_string(p, x + 2*mm, y - 30*mm, SIMEI  , font_name=font_name, font_size=6)

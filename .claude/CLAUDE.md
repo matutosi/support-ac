@@ -87,8 +87,8 @@ J-STAGE の論文の一覧の取得と，論文 PDF から全文 XML を作る�
 
 ### 現在の状態
 
-- 2026-09-26 10:14 (このセッション，MATUTOSI_DP)
-  **名札 (`nameplate.py`) の日付と会場を 2mm 左へ移した** (`x + 65*mm` → `x + 63*mm`)．congress_vs の第31回の名札で右に寄りすぎていたため．
+- 2026-09-26 10:16 (このセッション，MATUTOSI_DP)
+  **名札 (`nameplate.py`) の日付と会場を計 5mm 左へ移した** (`x + 65*mm` → `x + 60*mm`．2mm と 3mm の2回)．congress_vs の第31回の名札で右に寄りすぎていたため．
   congress_vs の `tools/nametag.py` はこの配置に合わせてある．
 
 - 2026-09-25 (このセッション，web．worktree `../support-ac-23`・ブランチ `claude/vol23`)

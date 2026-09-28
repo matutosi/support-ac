@@ -321,7 +321,14 @@ def section_of(line, names, max_len=18):
     「参考文献」のような意味のある頭は余りとみなさない (「文献」も見出しの名前にあるため)．
     """
     raw = line.strip()
-    if not raw or len(raw) > max_len:
+    if not raw:
+        return None, None
+    # 飾り記号が細い線や点の並びとして読まれ，頭のゴミが長くなることがある (24(2):103 の
+    # 「iil///1i'il,//il//･.,1, REFERENCES」)．頭が線・点に見える字だけなら，長さによらずゴミとして外す
+    m = re.match(r"^[il1I|/\\'`.,･・:;_~\-\s　]{4,}(?=[A-Z一-龥])", raw)
+    if m and len(raw) - m.end() <= max_len:
+        raw = raw[m.end():]
+    if len(raw) > max_len:
         return None, None
     t = re.sub(r"[\s　]", "", raw)
     for nm in sorted(names, key=len, reverse=True):
@@ -588,7 +595,9 @@ def main():
                 else:
                     floats_txt.append(f"===== p{pno} {label} ({name} と見比べて組む)")
                     pending.append([f":::table {'TA' if appx else 'T'}{num} {label.rstrip('.．')}", cap_body,
-                                    f"<!-- 要作成: tables/{name} と floats.txt (p{pno}) を見て表を組む -->", ":::"])
+                                    # 表は画像のまま載せる (2026-09-29 ユーザ指示．スキャンの表は OCR の文字しか無いので組まない)．
+                                    # tables/ の画像の枠をページ画像で確かめる
+                                    "@image", ":::"])
 
         for rows in cols:
             if rows:

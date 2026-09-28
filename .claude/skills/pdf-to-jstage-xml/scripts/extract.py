@@ -592,7 +592,10 @@ def main():
                 pending_floats.append([f":::fig F{num} 図{num} {name}", f"@@CAP {key}@@", ":::"])
             else:
                 pending_floats.append([f":::table T{num} 表{num}", f"@@CAP {key}@@",
-                                       f"<!-- 要作成: tables/{name} と floats.txt (page {pno}) を見て表を組む -->",
+                                       # 表は画像のまま載せるのが既定 (2026-09-29 ユーザ指示)．ただし DTP の号で組版された表が
+                                       # 容易に組めるときだけは組む (table_draft.py で下書きし，@image の行を消す)
+                                       "@image",
+                                       f"<!-- 組版された表で容易に組めるなら: table_draft.py (page {pno}) で組み，上の @image の行を消す -->",
                                        ":::"])
             REPORT.append(f"p{pno}: {kind}{num} の枠 {tuple(round(v) for v in clip)}")
         if orphans and last_float:

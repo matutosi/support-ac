@@ -70,6 +70,8 @@ def inline(s):
     s = re.sub(r"(?<![A-Za-z0-9_*])\*(?!\s)(.+?)(?<!\s)\*(?![A-Za-z0-9_*])", r"<italic>\1</italic>", s)
     # 数字に続く斜体のギリシア文字など (「4*φ*」．23(2):89)．ASCII でない字で始まるときだけ受ける
     s = re.sub(r"(?<=[0-9])\*(?=[^\x00-\x7f])([^*\s]+?)\*(?![A-Za-z0-9_*])", r"<italic>\1</italic>", s)
+    # 数字に続く 1〜2 字の英字の変数 (回帰式の「0.07*x*」．24(2):73 では * が残るので立体にしていた)
+    s = re.sub(r"(?<=[0-9])\*([A-Za-z]{1,2})\*(?![A-Za-z0-9_*])", r"<italic>\1</italic>", s)
     s = re.sub(r"\^([^^\s][^^]*?)\^", r"<sup>\1</sup>", s)
     s = re.sub(r"(?<![~〜])~([^~\s][^~]*?)~(?!~)", r"<sub>\1</sub>", s)
     s = re.sub(r"(https?://[A-Za-z0-9._~:/?#\[\]@!$&'()*+;=%-]+?)(?=[，,。．、）)\s]|[^\x00-\x7f]|$|\.(?:\s|$))",
@@ -1496,12 +1498,14 @@ def build_table(fid, label, content, refs, floats, work, names):
     else:
         # 表を組んでいないとき・「@image」と書いたときは画像で載せる (続きのページの画像も足す)
         num = re.sub(r"\D", "", fid)
-        table = "".join(f'<graphic xlink:href="{names.add(p)}"/>' for p in continued(work / "tables", f"table{num}"))
+        # 付表の枠 (TA1．extract_scan.py が付ける) の画像は appendix1.png．番号の数字だけで探すと
+        # Table 1 の画像 (table1.png) と取り違える (24(2):123 の作成役が見つけた)
+        stem = f"appendix{num}" if fid.startswith("TA") else f"table{num}"
+        table = "".join(f'<graphic xlink:href="{names.add(p)}"/>' for p in continued(work / "tables", stem))
         if not table:
-            REPORT.append(f"{fid}: 表も画像も無い")
+            REPORT.append(f"{fid}: 表も画像も無い (tables/{stem}*.png)")
         elif not intended_image:
-            REPORT.append(f"{fid}: 表が組まれていないので画像で代用した (tables/table{num}*.png)．"
-                          "できれば表に組む．画像のままでよければ枠に「@image」と書く")
+            REPORT.append(f"{fid}: 表を画像で載せた (tables/{stem}*.png)．枠に「@image」と書くとこの報告は出ない")
     ft = ""
     if foot:
         ft = "<table-wrap-foot>" + "".join(f"<p>{para_xml(f, refs, floats, fid)}</p>" for f in foot) + "</table-wrap-foot>"

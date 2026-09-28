@@ -115,6 +115,17 @@ def main():
     def img(href):
         return src.get(href, f"(対応表に無い: {href})")
 
+    def shape(href):
+        # 縦横を添えて，紙面で寝ていた図表が寝たまま画像になっていないかを検証役が疑えるようにする
+        # (13(1):1 の Table 3 は横長の表が縦長の画像のまま載っていた)
+        try:
+            from PIL import Image
+            with Image.open(src[href]) as im:
+                w, h = im.size
+            return f" ({w}×{h}，{'縦長' if h > w else '横長'})"
+        except Exception:
+            return ""
+
     # リンクの行き先の表示 (文献は先頭 40 字，図表は番号と図題の先頭)
     refs = {}
     for ref in r.iter("ref"):
@@ -202,17 +213,17 @@ def main():
                 # 2枚組の図 (「a.」「b.」) は画像が2枚ある．1枚目しか出さないと
                 # 検証役が「半分しか載っていない」と誤解する (19(2):95 の Fig. 8)
                 for g in c.findall("graphic"):
-                    o.append(f"  画像: `{img(g.get(XLINK))}`")
+                    o.append(f"  画像: `{img(g.get(XLINK))}`{shape(g.get(XLINK))}")
                 o.append("")
             elif c.tag == "disp-formula":
                 o.append(f"**[式 {c.get('id')}] {c.findtext('label') or '(番号なし)'}**")
                 for g in c.findall("graphic"):
-                    o.append(f"  画像で掲載: `{img(g.get(XLINK))}`")
+                    o.append(f"  画像で掲載: `{img(g.get(XLINK))}`{shape(g.get(XLINK))}")
                 o.append("")
             elif c.tag == "table-wrap":
                 o.append(f"**[表 {c.get('id')}] {c.findtext('label')}** {inline(c.find('caption/p'), refs)}")
                 for g in c.findall("graphic"):
-                    o.append(f"  画像で掲載: `{img(g.get(XLINK))}`")
+                    o.append(f"  画像で掲載: `{img(g.get(XLINK))}`{shape(g.get(XLINK))}")
                 if c.find("table") is not None:
                     o.extend([""] + table_text(c.find("table"), refs))
                 for p in c.iter("table-wrap-foot"):
@@ -236,6 +247,12 @@ def main():
         text, parts = ref_summary(ref)
         o.append(f"- **{ref.get('id')}** {text}")
         o.append("  - " + " ／ ".join(f"{k}: {v}" for k, v in parts.items() if v))
+    # 文献一覧の末尾の注記 (入れ子の <ref-list> の <p>．「（＊印を付したものは直接参照できなかった）」)．
+    # 出さないと検証役が「注記が抜けている」と誤報する (24(2):153)
+    if rl is not None:
+        for sub in rl.findall("ref-list"):
+            for p in sub.findall("p"):
+                o.append(f"- (注記) {inline(p, refs)}")
     n_x = len(list(r.iter("xref")))
     o += ["", "## 数", "",
           f"- 段落 {len(list(r.find('body').iter('p')))}，図 {len(list(r.iter('fig')))}，表 {len(list(r.iter('table-wrap')))}，"

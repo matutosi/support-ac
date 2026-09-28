@@ -4,7 +4,7 @@
     python bundle.py <作業ディレクトリ> [<作業ディレクトリ> ...] --out <出力先フォルダ>
 
     例: python bundle.py jstage/work/31/193 jstage/work/42/059 jstage/work/37/037 --out jstage/work/_bundle/trial
-        python bundle.py <15(1) の作業ディレクトリをすべて> --out jstage/work/_bundle/15_1
+        python bundle.py <15(1) の作業ディレクトリをすべて> --out jstage/work/_bundle/trial
 
     zip の名前は {資料コード}.zip に決まっているので，同じフォルダへ出すと前の zip を上書きする．
     _bundle に残す形は _bundle/<巻>_<号>/rev_<記事識別子>.zip (記事ごと．2026-09-28 ユーザ指示)．

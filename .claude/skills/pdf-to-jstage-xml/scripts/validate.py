@@ -213,7 +213,7 @@ def check_rules(doc, xml_path):
 
 
 def main():
-    if len(sys.argv) < 2:
+    if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
         sys.exit(__doc__)
     xml_path = Path(sys.argv[1])
     ensure_dtd()

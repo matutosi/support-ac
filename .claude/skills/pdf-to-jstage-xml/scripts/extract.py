@@ -435,12 +435,18 @@ def main():
         return hand_over(extract_scan, args)
     lay = prof["layout"]
     out = Path(args.out)
-    for sub in ("pages", "figs", "tables"):
+    # body.md が既にある (AI が手を入れた) ときは，手で切り出した図表の画像を消さないよう，
+    # 画像も body.new.md と同じく別の場所 (figs.new/・tables.new/) に書く (--force のときは figs/・tables/ を作り直す)
+    protect = (out / "body.md").exists() and not args.force
+    IMG = {"figs": "figs.new" if protect else "figs", "tables": "tables.new" if protect else "tables"}
+    for sub in ("pages", IMG["figs"], IMG["tables"]):
         (out / sub).mkdir(parents=True, exist_ok=True)
         if sub != "pages":
             # 前回の画像を消す (図表の数や続きのページが変わったとき，古い画像を build.py が拾わないように)
             for old in (out / sub).glob("*.png"):
                 old.unlink()
+    if protect:
+        REPORT.append("body.md が既にあるので，図表の画像は figs.new/・tables.new/ に書いた (figs/・tables/ は触っていない)")
 
 
     # 巻号が分かっていれば，設定の eras が言う体裁と食い違わないかを確かめる
@@ -514,7 +520,7 @@ def main():
         sub = "figs" if prev["kind"] == "fig" else "tables"
         name = f"{prev['kind'] if prev['kind'] == 'fig' else 'table'}{prev['num']}_{prev['parts']}.png"
         clip = trim_caption(content, cap_rects, page)
-        page.get_pixmap(dpi=args.dpi_fig if prev["kind"] == "fig" else 200, clip=clip).save(out / sub / name)
+        page.get_pixmap(dpi=args.dpi_fig if prev["kind"] == "fig" else 200, clip=clip).save(out / IMG[sub] / name)
         REPORT.append(f"p{pno}: {prev['key']} の続き ({how or ('見開き (横に続く)' if spread else '縦に続く')})"
                       f" {tuple(round(v) for v in clip)} → {sub}/{name}")
 
@@ -574,7 +580,7 @@ def main():
             content = content_rect(c, cap)
             clip = trim_caption(content, [cap["cap_rect"]], page)
             sub, name = ("figs", f"fig{num}.png") if kind == "fig" else ("tables", f"table{num}.png")
-            page.get_pixmap(dpi=args.dpi_fig if kind == "fig" else 200, clip=clip).save(out / sub / name)
+            page.get_pixmap(dpi=args.dpi_fig if kind == "fig" else 200, clip=clip).save(out / IMG[sub] / name)
             key = f"{kind}{num}"
             captions[key] = strip_label(cap["text"], lay)
             rows = [(l["y0"], l["x0"], l["md"]) for l in lines if l.get("cap") and cap["cap_rect"].intersects(

@@ -63,7 +63,7 @@ layout:
   caption_pattern: '^(図|表|Fig\.|Table)\s*(\d+)'   # 図表の題の形
 
 # 特別な扱いをする節の見出し．号や言語によって言い方が違うので**並びで書く**．
-# 使うのは abstract・ack・refs の3つ (appendix は控え)．
+# build.py が使うのは abstract・ack・refs の3つ．appendix は apply_backup.py・extract_scan.py が節の区切りに使う．
 sections:
   abstract: [摘要, 要約, ABSTRACT, Abstract]   # → <abstract> (本文からは外す)
   ack: [謝辞, ACKNOWLEDGMENTS, Acknowledgements]
@@ -74,9 +74,11 @@ sections:
 # junk: 柱と透かしのうち**この雑誌に固有のもの** (学会名など)．OCR が崩した形も並べる
 #       (NII-ELS の「NII-Electronic Library Service」などは雑誌によらないのでスクリプト側にある)．
 # caption_pattern: OCR は約物を全角にし字も崩すので，上の layout.caption_pattern より緩く書く．
+#       書くと extract_scan.py の既定 (CAP_DEFAULT) を上書きする．書かなければ既定を使う．
+#       既定は付表 (付表・Appendix) と番号の崩れ (句点の前の Z・l・I・O) も拾う (2026-09-28．vegsci.yaml と同じ)．
 scan:
   junk: '(Society|<学会名の一部>)'
-  caption_pattern: '^(図|表|Fig|Tab)[^\d]{0,4}(\d+)'
+  caption_pattern: '^(図|付表|表|Fig|Tab|Appendix|APPENDIX)[^\d]{0,4}(\d+|[ZlIO](?=\s*[.．]))'
 
 # 以下は**いまのスクリプトは読まない控え** (将来 refs.py を作るときと，DOI を手で入れるときの参考)
 reference_style: author-year                       # author-year か numbered か

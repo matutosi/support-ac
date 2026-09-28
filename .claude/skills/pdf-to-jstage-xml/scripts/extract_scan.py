@@ -20,12 +20,13 @@
     ocr.md        ページ・段ごとの行 (座標つき．body.md を直すときの原文)
     page1.txt     1ページ目の行 (書誌を埋めるときに見る)
     floats.txt    図表の枠の中の行 (表を組むときに見る)
-    pages/        ページ画像 (照合用．OCR は細かい字が読めないので既定 150dpi)
+    pages/        ページ画像 (照合用．既定 100dpi = 画素 × 0.72 が pt．細かい字は PDF を高い解像度で描き直して見る)
     figs/・tables/ 図・表の画像 (キャプションは入れない)
     report.txt    自動で判断したことと，確かめるところの一覧
 """
 import argparse
 import collections
+import difflib
 import re
 import statistics
 import sys
@@ -47,7 +48,10 @@ JUNK = re.compile(JUNK_COMMON)
 JA = r"ぁ-んァ-ヶ一-龥々ー"
 # 図表の題．OCR は約物を全角にし，字も崩すので (「Tab且e 2．」)，設定の caption_pattern より緩く見る．
 # 雑誌ごとに変えるときは設定の scan.caption_pattern に書く (main で差し替える)
-CAP_DEFAULT = r"^(図|表|Fig|Tab)[^\d]{0,4}(\d+)"
+# 付表 (「Appendix 1.」「付表1」) も表として拾う (24(1):29・41 で丸ごと落ちていた)
+# 番号は OCR が 1 字の数字もどきに読むことがある (24(1):29 の「Appendix Z.」= 2)．句点の前の Z・l・I・O も番号とみる
+CAP_DEFAULT = r"^(図|付表|表|Fig|Tab|Appendix|APPENDIX)[^\d]{0,4}(\d+|[ZlIO](?=\s*[.．]))"
+TABLE_WORDS = ("表", "付表", "Tab", "Appendix", "APPENDIX")
 CAP = re.compile(CAP_DEFAULT)
 # OCR が取り違えやすい字 (見た目が似ているもの)．直さずに report.txt へ出すだけ
 SUSPECT = re.compile(r"(crn|CIn|rn[のに]|至|孟|墨|正|齠|繝|【|】|工工|[０-９]|"
@@ -201,7 +205,12 @@ def classify(rows, colw, cap_pat):
         t = r["text"]
         w = r["rect"].width
         left, right = r["rect"].x0 - col_x0, col_x1 - r["rect"].x1
-        if cap_pat.match(t.lstrip("　 ")):
+        cm = cap_pat.match(t.lstrip("　 "))
+        # 段落の字下げで始まり，番号のあとに句点・コロンが無い行は本文 (「　Figure 1 shows …」「　表1に示す」．
+        # 24(1):53 で図題と取り違え，同じ番号の枠が2つできた)．図題は字下げが無いか，「Fig. 1.」と句点が付く
+        if cm and t.startswith(("　", " ")) and not re.match(r"\s*[.．:：]", t.lstrip("　 ")[cm.end():]):
+            cm = None
+        if cm:
             r["kind"] = "cap"
         elif w >= colw * 0.75:
             r["kind"] = "body"
@@ -226,7 +235,7 @@ def float_runs(rows):
     for i, r in enumerate(rows):
         if r["kind"] != "cap":
             continue
-        kind = "table" if CAP.match(r["text"].lstrip("　 ")).group(1) in ("表", "Tab") else "fig"
+        kind = "table" if CAP.match(r["text"].lstrip("　 ")).group(1) in TABLE_WORDS else "fig"
         a = b = i
         # 図表の中の字は float のほか，短いので head と見分けがつかないものもある (軸の目盛りなど)．
         # 本文かキャプションに当たるまで伸ばす
@@ -261,11 +270,78 @@ def cap_text(rows, i, cap_pat, body_x=None):
     for p in parts[1:]:
         text = join_text(text, p)
     m = cap_pat.match(text.lstrip("　 "))
-    label, body = m.group(0), text[m.end():].lstrip("　 .．")
-    return label, body, m.group(2)
+    # 呼び名の番号も数字に読み替える (「Appendix Z」→「Appendix 2」)
+    label = m.group(0)[:m.start(2) - m.start(0)] + m.group(2).translate(DIGIT_OCR)
+    body = text[m.end():].lstrip("　 .．")
+    return label, body, m.group(2).translate(DIGIT_OCR)
 
 
 # ---------------------------------------------------------------- 文字列の連結
+
+# OCR が数字と取り違える字 (24(1) の脚注の実測: 20G7・2〔｝07・2t 日・IQ.・ZO06・Juty l2)
+DIGIT_OCR = str.maketrans({"O": "0", "o": "0", "D": "0", "G": "0", "Q": "0", "l": "1", "I": "1", "i": "1",
+                           "t": "1", "Z": "2", "z": "2", "S": "5", "〔": "0", "｝": ""})
+MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august",
+          "september", "october", "november", "december"]
+
+
+def history_candidates(text):
+    """1 ページ目の文字から，受付日・受理日の候補を読む．{"received": ("2006-08-21", 元の文字), …}
+
+    和文は「受付：2006 年9 月2t 日／受理：…」，英文は「Received january IQ. ZO06/Accepted April 19, 2007」の形．
+    """
+    flat = re.sub(r"\s+", " ", text)
+    d = r"[0-9OoDGQlIitZzS〔｝]"
+    out = {}
+    for key, ja, en in (("received", "受付", r"R[ec]{2}[ie]{2}v[ec]d"), ("accepted", "受理", r"A[ce]{2}[ce]pt[ec]d")):
+        m = re.search(rf"{ja}\s*[:：]\s*({d}{{4,5}})\s*年\s*({d}{{1,2}})\s*月\s*({d}{{1,2}})\s*[日H]", flat)
+        if m:
+            y, mo, dd = (g.translate(DIGIT_OCR) for g in m.groups())
+        else:
+            m = re.search(rf"{en}\s*:?\s*([A-Za-z]{{3,10}})\.?\s*({d}{{1,2}})\s*[.,]?\s*({d}{{4,5}})", flat)
+            if not m:
+                continue
+            name = m.group(1).lower()
+            best = difflib.get_close_matches(name, MONTHS, n=1, cutoff=0.6)
+            if not best:
+                continue
+            mo, dd, y = str(MONTHS.index(best[0]) + 1), m.group(2).translate(DIGIT_OCR), m.group(3).translate(DIGIT_OCR)
+        y = y[:4]                              # 直後のノンブルがつながることがある (24(1):53 の「20072」)
+        if not (y.isdigit() and mo.isdigit() and dd.isdigit()) or not (1 <= int(mo) <= 12 and 1 <= int(dd) <= 31):
+            continue
+        out[key] = (f"{y}-{int(mo):02d}-{int(dd):02d}", m.group(0))
+    return out
+
+
+def section_of(line, names, max_len=18):
+    """行が節の見出し (引用文献・謝辞など) なら (名前, 行の字) を返す．違えば (None, None)．
+
+    OCR は見出しの頭の飾り記号 (■) を漢字や英字に読み (24 巻の「欝引用文献」「tw REFERENCES」)，
+    綴りも崩す (「REFERIENCES」)．頭の余り3字までと，綴りの1〜2字の崩れを許す．
+    「参考文献」のような意味のある頭は余りとみなさない (「文献」も見出しの名前にあるため)．
+    """
+    raw = line.strip()
+    if not raw or len(raw) > max_len:
+        return None, None
+    t = re.sub(r"[\s　]", "", raw)
+    for nm in sorted(names, key=len, reverse=True):
+        n = nm.replace(" ", "")
+        if t.endswith(n):
+            extra = t[:len(t) - len(n)]
+            if len(extra) <= 3 and extra not in ("参考", "主要", "引用", "付録"):
+                return nm, raw
+    best = (0.0, "")                           # いちばん似た名前を選ぶ (「REFERIENCES」は REFFERENCES でなく REFERENCES)
+    for nm in names:
+        n = nm.replace(" ", "")
+        if len(n) < 6:                         # 短い名前 (文献・謝辞) は崩れを許すと取り違える
+            continue
+        for extra in range(0, 4):
+            tail = t[extra:]
+            if abs(len(tail) - len(n)) <= 2:
+                r = difflib.SequenceMatcher(None, tail.lower(), n.lower()).ratio() + (0.001 if tail.isupper() == n.isupper() else 0)
+                best = max(best, (r, nm))
+    return (best[1], raw) if best[0] >= 0.85 else (None, None)
+
 
 def join_text(a, b):
     """行をつなぐ．和文は詰め，欧文は空白を入れる．"""
@@ -287,7 +363,9 @@ def main():
     ap.add_argument("--journal", default="vegsci")
     ap.add_argument("--out", required=True)
     ap.add_argument("--band", type=float, default=9.0, help="同じ行とみなす y の帯 (pt)")
-    ap.add_argument("--dpi-page", type=int, default=150)
+    # extract.py から呼ばれたときと同じ 100dpi にそろえる (違うと，画素から pt への換算を取り違えて
+    # 切り出しの枠が横に 40〜60pt ずれた．24(1):41)
+    ap.add_argument("--dpi-page", type=int, default=100)
     ap.add_argument("--dpi-fig", type=int, default=300)
     ap.add_argument("--force", action="store_true", help="既にある body.md を上書きする")
     args = ap.parse_args()
@@ -308,11 +386,18 @@ def main():
     sec = prof["sections"]
     names = lambda k: [sec[k]] if isinstance(sec[k], str) else list(sec[k])
     out = Path(args.out)
-    for sub in ("pages", "figs", "tables"):
+    # body.md が既にある (AI が手を入れた) ときは，手で切り出した図表の画像を消さないよう，
+    # 画像も body.new.md と同じく別の場所 (figs.new/・tables.new/) に書く (--force のときは figs/・tables/ を作り直す)
+    protect = (out / "body.md").exists() and not args.force
+    IMG = {"figs": "figs.new" if protect else "figs", "tables": "tables.new" if protect else "tables"}
+    for sub in ("pages", IMG["figs"], IMG["tables"]):
         (out / sub).mkdir(parents=True, exist_ok=True)
         if sub != "pages":
+            # 前回の画像を消す (図表の数や続きのページが変わったとき，古い画像を build.py が拾わないように)
             for old in (out / sub).glob("*.png"):
                 old.unlink()
+    if protect:
+        REPORT.append("body.md が既にあるので，図表の画像は figs.new/・tables.new/ に書いた (figs/・tables/ は触っていない)")
 
 
     # 巻号が分かっていれば，設定の eras が言う体裁と食い違わないかを確かめる
@@ -327,10 +412,22 @@ def main():
             REPORT.append(f"この巻号の原稿種別の印字は「{era['category']}」のはず (設定の eras より)")
 
     doc = pymupdf.open(args.pdf)
+    # 受付日・受理日は 1 ページ目の脚注にあるが，柱と一緒に外れるうえ OCR が崩す．
+    # 誤読 (月の 8→9 など) を直せないので meta.yaml には書かず，候補として report.txt に出す
+    meta_hist = (yaml.safe_load(mp.read_text(encoding="utf-8")) or {}).get("history") or {} if mp.exists() else {}
+    # 原稿種別 (article_type) は読まない．1 ページ目の帯は白抜きの図柄で，OCR の文字の層に入らない
+    # (24(1) では「驪謹驤欝…」のようなゴミ．英文の本文の「Data」に当たる誤りも出た)．手順 2 の 9 で AI がページ画像から書く
+    REPORT.append("原稿種別 (meta.yaml の article_type・category) と連絡著者 (corresp・email) は，"
+                  "スキャンでは読めない．pages/p001.png の帯と脚注を見て書く")
+    for k, v in history_candidates(doc[0].get_text()).items():
+        now = meta_hist.get(k)
+        REPORT.append(f"{'受付日' if k == 'received' else '受理日'}の候補 (1 ページ目の脚注の OCR．ページ画像で確かめて meta.yaml に書く): "
+                      f"{v[0]}  ← {v[1]!r}" + (f"  (meta.yaml は {now})" if now else ""))
     md, ocr, page1, floats_txt = [], [], [], []
     para, in_refs, started = "", False, False
     refs, pending = [], []
-    fig_n = collections.Counter()
+    float_keys = set()
+    seen_float = {}             # (種類, 付表か, 番号) → (最初のページ, 続きの数)
 
     def flush():
         nonlocal para
@@ -362,7 +459,7 @@ def main():
         if len(heights) >= 5 and statistics.median(heights) > 25:
             name = f"table_p{pno}.png"
             page.get_pixmap(dpi=200, clip=pymupdf.Rect(30, 30, page.rect.width - 30,
-                                                       page.rect.height - 36)).save(out / "tables" / name)
+                                                       page.rect.height - 36)).save(out / IMG["tables"] / name)
             REPORT.append(f"p{pno}: 90 度回した図表のページとみなした (OCR が読めていない)．"
                           f"tables/{name} を見て，body.md に `@image` の枠を AI が手で入れる")
             for g in cols:
@@ -399,7 +496,8 @@ def main():
             for run in float_runs(rows):
                 label, cap_body, num = caps[id(rows[run["cap"]])]
                 kind = run["kind"]
-                fig_n[kind] += 1
+                # 図表の数は番号ごとに 1 回数える (続きのページ・つぶれた枠の重複を数えない)
+                float_keys.add((kind, label.lstrip("　 ").startswith(("付表", "Appendix", "APPENDIX")), num))
                 cap_r = rows[run["cap"]]["rect"]
                 mid = page.rect.width / 2
                 # 2段にまたがる図表 (ページ全体の表など): キャプションが段の境を越えている
@@ -443,7 +541,24 @@ def main():
                 # 図はキャプションが下，表は上にあるので，反対側へ白いところまで伸ばす
                 clip = (pymupdf.Rect(x0, top, x1, cap_r.y0 - 3) if kind == "fig"
                         else pymupdf.Rect(x0, cap_r.y1 + 3, x1, bottom)) & page.rect
-                name = f"{kind}{num}.png"
+                # 付表は Table 1 と番号が重なるので，画像の名前と枠の番号を分ける (TA1・appendix1.png)．
+                # build.py は枠に書いた呼び名 (Appendix 1) で本文から引く
+                appx = kind == "table" and label.lstrip("　 ").startswith(("付表", "Appendix", "APPENDIX"))
+                name = f"appendix{num}.png" if appx else f"{kind}{num}.png"
+                # 同じ番号の2つ目: 後のページなら，ページをまたぐ図表の続き (「Fig. 3 continue」．24(1):19) とみて
+                # 続きの画像 (fig3_2.png．build.py が図の続きとして載せる) にし，枠は作らない．
+                # 同じページなら，本文の行を図題と取り違えたとみて切り出さない (ID が重なって DTD の誤りになる)
+                cont = False
+                if (kind, appx, num) in seen_float:
+                    first_p, n_cont = seen_float[(kind, appx, num)]
+                    if pno == first_p:
+                        REPORT.append(f"p{pno}: {label} が同じページに2つある．2つ目は図題でないとみて切り出さない (ページ画像で確かめる)")
+                        continue
+                    n_cont += 1
+                    seen_float[(kind, appx, num)] = (first_p, n_cont)
+                    name = f"{name[:-4]}_{n_cont}.png"
+                    cont = True
+                # 1 つ目として覚えるのは切り出せたときだけ (枠がつぶれたら，同じ番号の次の候補に譲る．24(1):41 の Fig. 3)
                 if clip.width < 10 or clip.height < 10:
                     # 枠がつぶれた (図題の位置から中身の範囲を決められなかった)．
                     # 画像は作らず，ページ画像を見て AI が crop.py で手で切り出す
@@ -451,9 +566,11 @@ def main():
                                   f"pages/p{pno:03d}.png を見て crop.py で切り出し，tables/ か figs/ に置く")
                     continue
                 page.get_pixmap(dpi=args.dpi_fig if kind == "fig" else 200, clip=clip).save(
-                    out / ("figs" if kind == "fig" else "tables") / name)
+                    out / IMG["figs" if kind == "fig" else "tables"] / name)
+                if not cont:
+                    seen_float[(kind, appx, num)] = (pno, 1)
                 REPORT.append(f"p{pno}: {label} の枠 {tuple(round(v) for v in clip)} → {name}"
-                              f"{'．2段にまたがる' if wide else ''}．ページ画像で確かめる")
+                              f"{'．2段にまたがる' if wide else ''}{'．前のページからの続き' if cont else ''}．ページ画像で確かめる")
                 # 枠に入った行は本文から外す (図の軸の目盛り・表の中の字)
                 for r in rows[run["a"]:run["b"] + 1]:
                     if r["kind"] not in ("cap", "capcont"):
@@ -464,11 +581,13 @@ def main():
                         for r in other:
                             if r not in rows and clip.y0 - 6 <= r["rect"].y0 <= clip.y1 + 6:
                                 r["kind"] = "float"
-                if kind == "fig":
+                if cont:
+                    pass                      # 続きの画像は 1 つ目の枠に載る (枠は作らない)
+                elif kind == "fig":
                     pending.append([f":::fig F{num} {label.rstrip('.．')} {name}", cap_body, ":::"])
                 else:
                     floats_txt.append(f"===== p{pno} {label} ({name} と見比べて組む)")
-                    pending.append([f":::table T{num} {label.rstrip('.．')}", cap_body,
+                    pending.append([f":::table {'TA' if appx else 'T'}{num} {label.rstrip('.．')}", cap_body,
                                     f"<!-- 要作成: tables/{name} と floats.txt (p{pno}) を見て表を組む -->", ":::"])
 
         for rows in cols:
@@ -490,6 +609,14 @@ def main():
                     else:
                         page1.append(f"{r['rect'].x0:5.0f},{r['rect'].y0:5.0f} | {t}")
                         continue
+                if kind in ("head", "head2"):
+                    # 見出しの頭の飾り記号 (■ など) を OCR が漢字に読むことがある (24 巻の「欝引用文献」「鰄謝辞」)．
+                    # 節の名前 (引用文献・謝辞・摘要) で終わり，頭の余りが3字以内なら，余りを外して大見出しにする
+                    sec_name, extra = section_of(t, [nm for k in ("refs", "ack", "abstract") if k in sec for nm in names(k)])
+                    if sec_name:
+                        if extra != sec_name:
+                            REPORT.append(f"p{pno}: 見出し {t!r} を「{sec_name}」とみた (頭のゴミ・綴りの崩れを OCR の読み誤りとみて直した)")
+                        t, kind = sec_name, "head"
                 if kind == "head":
                     flush()
                     in_refs = in_refs or t.replace(" ", "") in names("refs")
@@ -515,9 +642,12 @@ def main():
     for i, line in enumerate(md):
         for m in SUSPECT.finditer(line):
             REPORT.append(f"OCR 要確認: {m.group(0)!r} ({line[max(0, m.start() - 12):m.start() + 14]})")
+    fig_n = collections.Counter(k[0] for k in float_keys)
     REPORT.insert(0, f"図 {fig_n['fig']}・表 {fig_n['table']}，引用文献 {len(refs)} 件，"
                      f"本文 {sum(1 for l in md if l and not l.startswith(('#', ':', '<')))} 段落")
     REPORT.insert(1, "斜体の情報がスキャンには無い．学名・誌名の斜体は AI がページ画像を見て付ける")
+    REPORT.insert(2, f"pages/p*.png は {args.dpi_page}dpi (画素 × {72 / args.dpi_page:.2f} = PDF の pt)．"
+                     "crop.py の --rect は pt で渡すので，ocr.md の座標 (pt) から起こすのが確か")
 
     body = out / "body.md"
     target = body if (args.force or not body.exists()) else out / "body.new.md"

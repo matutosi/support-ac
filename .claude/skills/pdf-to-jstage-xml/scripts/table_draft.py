@@ -2,7 +2,8 @@
 
 使い方:
     python table_draft.py <論文.pdf> <ページ番号> [--clip x0,y0,x1,y1] [--skip-top N]
-                          [--no-merge] [--cols x,x,...] [--key-col K]
+                          [--no-merge] [--cols x,x,...] [--key-col K] [--next-clip x0,y0,x1,y1]
+                          [--col-gap PT] [--row-tol PT]
 
     --clip      表の範囲 (pt)．extract.py の report.txt の「tableN の枠」をもとに，見出しを除いて渡す
     --skip-top  上から N 行を捨てる (キャプションや見出しの行．見出しは AI が手で組むほうが早い)

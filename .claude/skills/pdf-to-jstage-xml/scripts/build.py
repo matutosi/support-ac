@@ -867,7 +867,11 @@ def link_floats(text, floats):
         if key is None:      # 呼び名で引けないときは番号で引く (図/Fig. → F，表/Table → T)
             key = ("F" if kind in ("図", "写真") or kind.startswith(("Fig", "Photo")) else "T") + num
         if key not in floats:
-            REPORT.append(f"本文の {kind}{num} に対応する図表が無い")
+            # 他の論文の表 (「Tab. 66」) を何度も引く論文がある (24(1):1)．同じ注意は 1 回だけ出す
+            msg = (f"本文の {kind}{num} に対応する図表が無い (他の論文の図表なら，body.md で "
+                   f"{{{{-|{shown}}}}} と書くとリンクしない)")
+            if msg not in REPORT:
+                REPORT.append(msg)
             return shown
         return f"\x04{key}\x02{shown}\x03"
 
@@ -1181,9 +1185,16 @@ def compare_web_refs(work, refs):
     if len(web) != len(pdf):
         REPORT.append(f"引用文献の件数がウェブ版と違う: PDF {len(pdf)} 件 / ウェブ {len(web)} 件．並びもずれている恐れがある")
     pair, _ = pair_web_refs(web, pdf)
+    lone = [k + 1 for k in range(len(pdf)) if k not in pair]
+    if lone:
+        REPORT.append(f"引用文献がウェブ版のどれとも組にならない: {', '.join(f'B{k}' for k in lone)} (紙面にだけある文献か，綴りが大きく違う)")
     # ウェブ版が「1) 著者. 題名. 誌名. (1984) vol.55, p.105-114.」のように
     # 項目ごとに組み直されている号がある (旧号のほとんど)．そのときは並びも書き方も違う
-    structured = sum(bool(re.match(r"^\d+[)）]", l)) for l in web) > len(web) / 2
+    # 登録版が項目ごとに組み直された形なら，並びも書き方も違うので語で比べる．
+    # 「1) 著者. 題名. …」(旧号のウェブ版) と，控えの XML の「著者. 題名. 誌名. (1986) vol.26, p.71-77.」
+    # 「著者 名 . 題名. 誌名. 2000; vol. 25, no. 4, p. 339- 344.」(24(1) で全件「違う」と出ていた)
+    reg_form = re.compile(r"^\d+[)）]|\((1[89]|20)\d{2}\)\s*(vol\.|p\.|$)|(?<!\d)(1[89]|20)\d{2};\s*vol\.")
+    structured = sum(bool(reg_form.search(l)) for l in web) > len(web) / 2
     return compare_pairs(web, pdf, pair, structured, norm)
 
 
@@ -1226,9 +1237,21 @@ def pair_web_refs(web, pdf):
                 rest.remove(j)
                 break
     keyed = set(pair)
-    for i in range(len(pdf)):                   # 組にならなかったものは，残りを順に当てる
-        if i not in pair and rest:
-            pair[i] = rest.pop(0)
+    # 組にならなかったものは，残りのうち語の重なりが 4 割以上で最も大きい相手と組む．
+    # 以前は残りを順に当てていたが，登録版は並びが紙面と違うことが多く，組み違いで「違う」が大量に出た (24(1))
+    for i in range(len(pdf)):
+        if i in pair or not rest:
+            continue
+        b = ref_words(pdf[i])
+        best, score = None, 0.0
+        for j in rest:
+            a = ref_words(web[j])
+            s = sum((a & b).values()) / max(1, min(sum(a.values()), sum(b.values())))
+            if s > score:
+                best, score = j, s
+        if best is not None and score >= 0.4:
+            pair[i] = best
+            rest.remove(best)
     return pair, keyed
 
 
@@ -1237,8 +1260,14 @@ def ref_words(t):
     import unicodedata
     from collections import Counter
     n = unicodedata.normalize("NFKC", t).casefold()
+    # アクセントをならす (登録版は「Dufrene」，紙面は「Dufrêne」．24(1):41)．かなの濁点は残す
+    n = "".join(ch for ch in unicodedata.normalize("NFKD", n)
+                if not (unicodedata.combining(ch) and "̀" <= ch <= "ͯ"))
+    n = unicodedata.normalize("NFKC", n)
     n = re.sub(r"^\s*\d+[)）]", "", n)             # ウェブ版の通し番号
     n = re.sub(r"(?:doi|https?)\S*", "", n)        # ウェブ版だけが持つ DOI・URL
+    # 登録版 (控えの XML) だけが持つもの: 接頭辞の無い DOI・JaLC の番号・号 (「no. 4」)・&amp;
+    n = re.sub(r"10\.\d{4,9}/\S+|dn/\S+|no\.\s*\d+|&amp;", " ", n)
     c = Counter(re.findall(r"[a-z]+|\d+|[^\x00-\x7f\W\d_]", n))
     for w in ("vol", "p", "pp", "no", "in", "and"):  # 組み方の違いで出入りする語
         c.pop(w, None)
@@ -1247,7 +1276,8 @@ def ref_words(t):
     return c
 
 
-DOI_IN_WEB = re.compile(r"doi:\s*(10\.\d{4,9}/[^\s<>\"]+)", re.I)
+# 登録版の DOI は「doi:10.…」と，接頭辞の無い「10.…」(新しい書き方の文献．控えの XML) の2通りある
+DOI_IN_WEB = re.compile(r"(?:doi:\s*|(?<![\w/.]))(10\.\d{4,9}/[^\s<>\"]+)", re.I)
 
 
 def attach_web_dois(work, refs):
@@ -1267,19 +1297,35 @@ def attach_web_dois(work, refs):
     web = [l for l in path.read_text(encoding="utf-8").splitlines() if l.strip()]
     pdf = [r.text.replace("*", "") for r in refs]
     n = 0
+    # 既に付いている DOI は付けない (付け直すと，本来の相手が飛ばされて次に似た文献へ重なって付く)
+    have = {r.doi.lower() for r in refs if isinstance(r.doi, str)}
     for w in web:
         m = DOI_IN_WEB.search(w)
         if not m:
             continue
         doi = m.group(1).rstrip(".,;")
-        y = re.search(r"\((1[89]\d{2}|20\d{2})\)", w)
+        if doi.lower() in have:
+            continue
+        # 年は「(1994)」(旧い書き方) か「1994;」(新しい書き方．控えの XML)
+        y = re.search(r"\((1[89]\d{2}|20\d{2})\)|(?<!\d)(1[89]\d{2}|20\d{2});", w)
+        y = y and (y.group(1) or y.group(2))
         vp = re.search(r"vol\.\s*(\d+).*?p\.\s*(\d+)", w)
         a = ref_words(w)
         best, score = None, 0.0
         for i, p in enumerate(pdf):
-            if refs[i].doi or (y and y.group(1) not in p):
+            if refs[i].doi:
                 continue
-            if vp and re.search(rf"(?<!\d){vp.group(1)}(?!\d)\D.*?(?<!\d){vp.group(2)}(?!\d)", p):
+            vp_hit = vp and re.search(rf"(?<!\d){vp.group(1)}(?!\d)\D.*?(?<!\d){vp.group(2)}(?!\d)", p)
+            if y and y not in p:
+                # 登録版の年が誤っていることがある (24(1):19 の Noss: 登録 1989，紙面 1990)．
+                # 巻・開始ページが合い，語の重なりも 6 割以上なら同じ文献とみる
+                if not vp_hit:
+                    continue
+                b = ref_words(p)
+                if sum((a & b).values()) / max(1, min(sum(a.values()), sum(b.values()))) < 0.6:
+                    continue
+                s = 0.9
+            elif vp_hit:
                 s = 1.0
             else:
                 b = ref_words(p)
@@ -1314,15 +1360,14 @@ def compare_pairs(web, pdf, pair, structured, norm):
         if structured:
             # ウェブ版が項目ごとに組み直された形のときは，字の並びで比べても意味が無い
             # (年や巻の位置が違う)．語の多重集合で比べ，片方にしかない語だけを出す
+            # 登録版は筆頭著者だけ・発行地なし・和文の書誌の足し書きなどで，PDF にだけある語は常に出る．
+            # 違いとして数えるのは，登録版にだけある語 (綴りや数字の食い違い) だけにする
             miss = words(w) - words(p)
-            extra = words(p) - words(w)
-            if not miss and not extra:
+            if not miss:
                 form += 1
                 continue
             content += 1
-            REPORT.append(f"引用文献がウェブ版と違う: B{k + 1} "
-                          + (f"ウェブにだけある語「{'・'.join(sorted(miss)[:5])}」" if miss else "")
-                          + (f" PDF にだけある語「{'・'.join(sorted(extra)[:5])}」" if extra else ""))
+            REPORT.append(f"引用文献がウェブ版と違う: B{k + 1} ウェブにだけある語「{'・'.join(sorted(miss)[:5])}」")
             continue
         content += 1
         a, b = norm(w), norm(p)

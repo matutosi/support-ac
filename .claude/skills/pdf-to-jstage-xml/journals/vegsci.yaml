@@ -22,6 +22,7 @@ article_types:
   原著:     {type: research-article,     en: Original Article}
   短報:     {type: brief-report,         en: Short Communication}
   資料:     {type: other,                en: Data}
+  資料・報告: {type: other,              en: Data}    # 24 巻の帯の文言 (24(1):65)
   特集:     {type: other,                en: Special Feature}
   寄稿:     {type: other,                en: Contribution}
   訂正:     {type: correction,           en: Correction}
@@ -89,10 +90,10 @@ scan:
   junk: '(Society|Sooiety|Sooietv|▽egetation|Vegetation Science$|Soienoe)'
   # 図表の題の見つけ方．OCR は約物を全角にし字も崩すので (「Tab且e 2．」)，
   # 上の layout.caption_pattern より緩く見る
-  caption_pattern: '^(図|表|Fig|Tab)[^\d]{0,4}(\d+)'
+  caption_pattern: '^(図|付表|表|Fig|Tab|Appendix|APPENDIX)[^\d]{0,4}(\d+|[ZlIO](?=\s*[.．]))'   # 付表も表として拾う (24(1):29・41)
 
-# 引用文献の書式 (scripts/refs.py の規則を選ぶ)
+# 引用文献の書式 (いまのスクリプトは読まない控え．_template.yaml と同じ)
 reference_style: author-year
 
-# DOI の形 (PDF に DOI が印刷されていない号で，下書きに入れる候補．必ず確かめる)
+# DOI の形 (いまのスクリプトは読まない控え．DOI は控えや記事ページの書誌から入る)
 doi_template: "10.15031/vegsci.{volume}.{fpage}"

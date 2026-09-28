@@ -763,8 +763,8 @@ def main():
         items = "".join(f'<li><a href="{attr(os.path.relpath(p, out_root).replace(os.sep, "/"))}">{esc(a.id)}</a> '
                         f'{esc(plain(a.am.find("title-group/article-title")))}</li>' for a, p in pages)
         idx = out_root / "index.html"
-        idx.write_text(f'<!DOCTYPE html><html lang="ja"><meta charset="utf-8"><title>プレビュー一覧</title>'
-                       f'<body><h1>プレビュー一覧 ({len(pages)} 本)</h1><p>{datetime.datetime.now():%Y-%m-%d %H:%M}</p>'
+        idx.write_text(f'<!DOCTYPE html><html lang="ja"><meta charset="utf-8"><title>プレビューの一覧</title>'
+                       f'<body><h1>プレビューの一覧 ({len(pages)} 本)</h1><p>{datetime.datetime.now():%Y-%m-%d %H:%M}</p>'
                        f'<ol>{items}</ol></body></html>', encoding="utf-8")
         print(f"一覧: {idx}")
     print(f"J-STAGE の CSS: {css_dir if css_dir else '使わない (preview.css だけ)'}")

@@ -494,6 +494,7 @@ class Ref:
         self.lang = "ja" if JA.search(self.text.split(" ")[0] + self.text[:12]) else "en"
         self.year = None
         self.names = []      # 検索用の著者名 (姓 または 全名)
+        self.doi = None      # J-STAGE に登録ずみの文献の DOI (attach_web_dois が付ける)
         self.xml = None
         self.kind = "other"
         self.parse()
@@ -674,8 +675,10 @@ class Ref:
         return s
 
     def to_xml(self):
+        # DOI は <pub-id> で末尾に置く (ガイドライン 3.1.18．引用文献リンク・被引用データへの反映率が上がる)
+        doi = f' <pub-id pub-id-type="doi">{esc(self.doi)}</pub-id>' if self.doi else ""
         return (f'<ref id="{self.id}" xml:lang="{self.lang}">'
-                f'<mixed-citation publication-type="{self.kind}">{self.xml}</mixed-citation></ref>')
+                f'<mixed-citation publication-type="{self.kind}">{self.xml}{doi}</mixed-citation></ref>')
 
 
 # ================================================================ 本文中の引用 (著者 年) のリンク
@@ -1112,6 +1115,7 @@ def main():
 
     load_known_ja(work)
     refs = [Ref(i + 1, t) for i, t in enumerate(ref_lines)]
+    n_doi = attach_web_dois(work, refs)
     # 番号だけでなく，枠に書いた呼び名 (「付表1」「Photo 1」) でも引けるように対応表にする
     floats = {b[1]: b[2] for b in main_blocks if b[0] in ("fig", "table", "formula")}
     # 記事識別子は J-STAGE の既存のもの (meta.yaml の article_id) を使う．無ければ「巻_開始ページ」
@@ -1156,7 +1160,7 @@ def main():
           f"・その他 {sum(r.kind == 'other' for r in refs)})，本文の文献リンク {n_x}，要確認 {len(REPORT)} 件 (build_report.txt)")
     if web_cmp:
         print(f"ウェブ版との照合: 件数 PDF {web_cmp[0]} / ウェブ {web_cmp[1]}，中身の違い {web_cmp[2]} 件"
-              f" (build_report.txt)，表記だけの違い {web_cmp[3]} 件")
+              f" (build_report.txt)，表記だけの違い {web_cmp[3]} 件，DOI を付けた {n_doi} 件")
     print(f"zip: {zpath}")
 
 
@@ -1170,15 +1174,28 @@ def compare_web_refs(work, refs):
     path = work / "refs_web.txt"
     if not path.exists():
         return None
-    import difflib
     import unicodedata
     web = [l for l in path.read_text(encoding="utf-8").splitlines() if l.strip()]
     pdf = [r.text.replace("*", "") for r in refs]
     norm = lambda t: re.sub(r"[\s　．.，,]", "", unicodedata.normalize("NFKC", t))
     if len(web) != len(pdf):
         REPORT.append(f"引用文献の件数がウェブ版と違う: PDF {len(pdf)} 件 / ウェブ {len(web)} 件．並びもずれている恐れがある")
-    # 旧号ではウェブ版と PDF で並びが全く違うことがある (19(2):113 では 36 件すべてが
-    # 添字のずれで「違う」と出ていた)．著者の先頭と年で組にしてから比べる
+    pair, _ = pair_web_refs(web, pdf)
+    # ウェブ版が「1) 著者. 題名. 誌名. (1984) vol.55, p.105-114.」のように
+    # 項目ごとに組み直されている号がある (旧号のほとんど)．そのときは並びも書き方も違う
+    structured = sum(bool(re.match(r"^\d+[)）]", l)) for l in web) > len(web) / 2
+    return compare_pairs(web, pdf, pair, structured, norm)
+
+
+def pair_web_refs(web, pdf):
+    """ウェブ版 (refs_web.txt) と PDF 版の文献を組にする．(組 {PDF の添字: ウェブの添字}, 著者と年で組になった PDF の添字の集合)．
+
+    旧号ではウェブ版と PDF で並びが全く違うことがある (19(2):113 では 36 件すべてが
+    添字のずれで「違う」と出ていた)．著者の先頭と年で組にし，残りは順に当てる．
+    """
+    import unicodedata
+    norm = lambda t: re.sub(r"[\s　．.，,]", "", unicodedata.normalize("NFKC", t))
+
     def key(t):
         # ウェブ版は「1) BRADFIELD G. E. 題名. 誌名. (1984) vol.55, p.105-114.」の形で，
         # 通し番号が付き，姓が総大文字で，年の位置も違う．番号を外し，大文字小文字も揃える
@@ -1208,26 +1225,82 @@ def compare_web_refs(work, refs):
                 pair[i] = j
                 rest.remove(j)
                 break
+    keyed = set(pair)
     for i in range(len(pdf)):                   # 組にならなかったものは，残りを順に当てる
         if i not in pair and rest:
             pair[i] = rest.pop(0)
-    # ウェブ版が「1) 著者. 題名. 誌名. (1984) vol.55, p.105-114.」のように
-    # 項目ごとに組み直されている号がある (旧号のほとんど)．そのときは並びも書き方も違う
-    structured = sum(bool(re.match(r"^\d+[)）]", l)) for l in web) > len(web) / 2
+    return pair, keyed
 
+
+def ref_words(t):
+    """文献の語の多重集合 (ウェブ版の番号・DOI・組み方で出入りする語・イニシャルを除く)．"""
+    import unicodedata
     from collections import Counter
+    n = unicodedata.normalize("NFKC", t).casefold()
+    n = re.sub(r"^\s*\d+[)）]", "", n)             # ウェブ版の通し番号
+    n = re.sub(r"(?:doi|https?)\S*", "", n)        # ウェブ版だけが持つ DOI・URL
+    c = Counter(re.findall(r"[a-z]+|\d+|[^\x00-\x7f\W\d_]", n))
+    for w in ("vol", "p", "pp", "no", "in", "and"):  # 組み方の違いで出入りする語
+        c.pop(w, None)
+    for w in [w for w in c if len(w) == 1 and w.isascii()]:
+        c.pop(w)                                  # イニシャル (ウェブ版は落とすことがある)
+    return c
 
-    def words(t):
-        n = unicodedata.normalize("NFKC", t).casefold()
-        n = re.sub(r"^\s*\d+[)）]", "", n)             # ウェブ版の通し番号
-        n = re.sub(r"(?:doi|https?)\S*", "", n)        # ウェブ版だけが持つ DOI・URL
-        c = Counter(re.findall(r"[a-z]+|\d+|[^\x00-\x7f\W\d_]", n))
-        for w in ("vol", "p", "pp", "no", "in", "and"):  # 組み方の違いで出入りする語
-            c.pop(w, None)
-        for w in [w for w in c if len(w) == 1 and w.isascii()]:
-            c.pop(w)                                  # イニシャル (ウェブ版は落とすことがある)
-        return c
 
+DOI_IN_WEB = re.compile(r"doi:\s*(10\.\d{4,9}/[^\s<>\"]+)", re.I)
+
+
+def attach_web_dois(work, refs):
+    """J-STAGE に登録ずみの文献 (refs_web.txt) の DOI を，対応する PDF 版の文献に付ける．
+
+    J-STAGE の原文問合わせで登録版の文献には DOI が付いている (13(1):1 では 24 件中 14 件) が，
+    記事訂正で全文 XML を上げると文献が置き換わり，DOI の無い文献になる．
+
+    DOI ごとに，**年が同じ PDF 版の文献**から相手を選ぶ．巻と開始ページが一致すればそれ
+    (登録版の著者名が崩れていても当たる．13(1):1 の「CHIPPENDALE」= 紙面の Chippindale)，
+    無ければ語の重なりが 6 割以上で最も大きいもの．同じ著者の同じ年の別の文献
+    (13(1):25 の Okitsu 1995 が 2 件) を取り違えないよう，筆頭著者と年だけでは決めない．
+    """
+    path = work / "refs_web.txt"
+    if not path.exists():
+        return 0
+    web = [l for l in path.read_text(encoding="utf-8").splitlines() if l.strip()]
+    pdf = [r.text.replace("*", "") for r in refs]
+    n = 0
+    for w in web:
+        m = DOI_IN_WEB.search(w)
+        if not m:
+            continue
+        doi = m.group(1).rstrip(".,;")
+        y = re.search(r"\((1[89]\d{2}|20\d{2})\)", w)
+        vp = re.search(r"vol\.\s*(\d+).*?p\.\s*(\d+)", w)
+        a = ref_words(w)
+        best, score = None, 0.0
+        for i, p in enumerate(pdf):
+            if refs[i].doi or (y and y.group(1) not in p):
+                continue
+            if vp and re.search(rf"(?<!\d){vp.group(1)}(?!\d)\D.*?(?<!\d){vp.group(2)}(?!\d)", p):
+                s = 1.0
+            else:
+                b = ref_words(p)
+                s = sum((a & b).values()) / max(1, min(sum(a.values()), sum(b.values())))
+            if s > score:
+                best, score = i, s
+        if best is None or score < 0.6:
+            REPORT.append(f"DOI を付けなかった (合う文献が無い．重なり {score:.0%}): {w[:70]}")
+            continue
+        refs[best].doi = doi
+        n += 1
+    doi_web = sum(bool(DOI_IN_WEB.search(l)) for l in web)
+    if n < doi_web:
+        REPORT.append(f"ウェブ版の DOI {doi_web} 件のうち {n} 件だけを付けた (残りは組にならないか語の重なりが少ない)")
+    return n
+
+
+def compare_pairs(web, pdf, pair, structured, norm):
+    """組にした文献を1件ずつ比べ，(PDF の件数, ウェブの件数, 中身の違い, 表記だけの違い) を返す．"""
+    import difflib
+    words = ref_words
     content, form = 0, 0
     for k in range(len(pdf)):
         if k not in pair:
@@ -1266,8 +1339,12 @@ def check_refs_text(path, refs):
     except ImportError:
         return
     doc = etree.parse(str(path), etree.XMLParser(load_dtd=False, no_network=True))
-    xs = ["".join(e.itertext()) for e in doc.xpath("//ref/mixed-citation")]
+    # 末尾の DOI (<pub-id>．紙面に無く J-STAGE の登録から足したもの) は比べない
+    xs = ["".join(t for t in e.xpath(".//text()[not(ancestor::pub-id)]"))
+          for e in doc.xpath("//ref/mixed-citation")]
     for r, x in zip(refs, xs):
+        if r.doi and x.endswith(" "):
+            x = x[:-1]                     # DOI の前に足した空白
         # 斜体・太字・下線の印を外し，印にしない「\*」は「*」に戻して比べる
         src = r.text.replace("\\*", "\x00").replace("*", "").replace("__", "").replace("\x00", "*")
         if src != x:

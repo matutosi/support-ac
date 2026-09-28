@@ -19,7 +19,8 @@ XML を作ったのは別のエージェントで，あなたはその作業に�
 
 ## 見てはいけないもの・してはいけないこと
 
-- `body.md`・`meta.yaml`・`meta.pdf.yaml`・`report.txt`・`build_report.txt`・`floats.txt`・`refs_web.txt` は開かない
+- `body.md`・`body.new.md`・`meta.yaml`・`meta.pdf.yaml`・`meta.backup.yaml`・`report.txt`・`build_report.txt`・`floats.txt`・`ocr.md`・
+  `refs_web.txt`・`backup_report.txt`・`refs_backup.md`・`review/triage.md` は開かない
   (作った側の判断に引きずられないため)．
 - **ファイルを書かない・書き換えない** (一時フォルダの画像を除く)．結果は最後の返答で返す．
   記録は作った側が `review/triage.md` に残す．

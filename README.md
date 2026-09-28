@@ -179,5 +179,5 @@ python jstage/list_articles.py html --lang en --out list_en.html
 Claude Code のスキル pdf-to-jstage-xml を使います．
 手順は .claude/skills/pdf-to-jstage-xml/SKILL.md，調査のまとめは jstage/pdf_to_jstage_xml.md にあります．
 作業ディレクトリは jstage/work/<巻>/<開始ページ>/ です (開始ページは 3 桁．例: jstage/work/13/001/．git では追跡しない)．
-論文の PDF はその中に <巻>_<開始ページ>.pdf として置きます．
-登載用の一式は <巻>_<開始ページ>.zip にまとめられます (J-STAGE が求めるフォルダの入れ子は zip の中にだけ作ります)．
+論文の PDF はその中に <記事識別子>.pdf として置きます (新しい号は <巻>_<開始ページ>，旧号は 13_KJ00006916281 のような形)．
+登載用の一式は <記事識別子>.zip にまとめられます (J-STAGE が求めるフォルダの入れ子は zip の中にだけ作ります)．

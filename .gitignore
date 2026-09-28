@@ -14,3 +14,6 @@ data/
 # pdf-to-jstage-xml: 作業ディレクトリと，初回に J-STAGE から取る DTD 一式
 jstage/work/
 .claude/skills/pdf-to-jstage-xml/dtd/
+# preview_tool: 見本 (J-STAGE から保存したページ・CSS・記事ダウンロード) と生成したプレビュー
+jstage/preview_tool/_sample/
+jstage/preview_tool/out/

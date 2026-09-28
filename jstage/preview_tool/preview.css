@@ -1,0 +1,87 @@
+/* preview.py が HTML に埋め込む CSS．
+   前半: J-STAGE の CSS が無いとき (body.pv-plain) に，J-STAGE の全文 HTML の見た目に近づけるための最小限の値．
+         値は J-STAGE の画面 (style.css・main.css) の主なクラスに合わせた (2026-09-28．43(1):1 の保存したページ)．
+   後半: プレビューだけの部品 (pv- で始まるクラス)．J-STAGE の CSS を使うときも効く． */
+
+/* ---------------------------------------------------------------- J-STAGE の CSS が無いとき */
+body.pv-plain { margin: 0; color: #454545; font-size: 13px; line-height: 20px;
+  font-family: "Meiryo", "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif; background: #fff; }
+.pv-plain .container { max-width: 1170px; margin: 0 auto; padding: 0 15px; }
+.pv-plain .journal-name { font-size: 22px; line-height: 30px; padding: 10px 0 0; color: #454545; }
+.pv-plain .global-article-subtitle { color: #363636; font-size: 13px; margin-bottom: 5px; }
+.pv-plain .global-article-title { font-size: 20px; line-height: 28px; margin: 0 0 5px; }
+.pv-plain .global-authors-name-tags a { color: #06c; }
+.pv-plain .global-tags span.tags-wrap { background: #f1f1f1; display: inline-block; font-size: 13px;
+  margin: 5px 5px 5px 0; border-radius: 8px; padding: 0 8px; text-transform: uppercase; }
+.pv-plain .original-tag-style { color: #ceb301; }
+.pv-plain .freeaccess-tag-style { color: #7fba00; }
+.pv-plain .fulltext-tag-style { color: #00767d; }
+.pv-plain .doi-icn { border-radius: 3px; background: #e7fbfe; border: #9e9e9e solid 1px; display: inline-block;
+  margin: 0 5px 0 0; text-align: center; color: #363636; padding: 0 5px; width: 40px; }
+.pv-plain a.bluelink-style { color: #06c; text-decoration: none; }
+.pv-plain a.bluelink-style:hover { text-decoration: underline; }
+.pv-plain .section-title-18, .pv-plain .section-title-noborder-18 { color: #454545; padding: 37px 0 10px; display: block;
+  font-size: 18px; margin-bottom: 10px; }
+.pv-plain .section-title-18 { border-bottom: #ebebeb solid 1px; }
+.pv-plain .section-title-14 { font-size: 14px; }
+.pv-plain .global-para-14 { font-size: 14px; line-height: 22px; margin: 20px 0; }
+.pv-plain .fj-sec-p { text-indent: 1em; }
+.pv-plain .global-bold-txt { font-weight: bold; }
+.pv-plain .span-block { display: block; }
+.pv-plain .bottom-margin-1 { margin-bottom: 10px; }
+.pv-plain .global-image-holder { border: #ebebeb solid 1px; margin: 20px 0 30px; text-align: center; position: relative; }
+.pv-plain .global-image-holder img { max-width: 100%; }
+.pv-plain .pv-fulltext { display: flex; align-items: flex-start; gap: 2%; }
+.pv-plain #sticky-sidebar { width: 20%; position: sticky; top: 30px; padding-top: 50px; font-size: 13px; }
+.pv-plain #sticky-sidebar ul { list-style: none; padding: 0; }
+.pv-plain #sticky-sidebar li { margin: 4px 0; }
+.pv-plain .divider-solid-bottom { border-bottom: #ebebeb solid 1px; }
+.pv-plain .non-sticky-content { width: 77%; }
+.pv-plain #article-overview-references-list { list-style: none; padding: 0; font-size: 14px; line-height: 22px; }
+.pv-plain #article-overview-references-list li { margin: 8px 0; }
+.pv-plain .reference-num-txt { font-family: Arial, "MS PGothic", sans-serif; }
+.pv-plain .accordion_container { margin: 8px 0; }
+.pv-plain .accordion_head { cursor: pointer; font-weight: bold; }
+.pv-plain .accodion_body_ul { list-style: none; padding-left: 1em; }
+.pv-plain .accordion_affilinfo { margin: 2px 0 8px 1em; }
+.pv-plain .accodion_lic { display: inline-block; margin-right: 1.5em; }
+.pv-plain .clearfix { clear: both; }
+
+/* 保存したページには J-STAGE の Web フォント (robotoregular) のファイルが無く，代わりの書体で斜体が付かない．
+   本物の画面では <i> は斜体なので，ここで補う (2026-09-28 に 13(1):1 の学名で確かめた) */
+.pv-with-jstage i { font-family: Arial, "Meiryo", sans-serif; font-style: italic; }
+.pv-with-jstage b, .pv-with-jstage th { font-family: Arial, "Meiryo", sans-serif; font-weight: bold; }
+
+/* ---------------------------------------------------------------- プレビューだけの部品 */
+.pv-banner { background: #5b3d8f; color: #fff; padding: 6px 15px; font-size: 13px; position: sticky; top: 0; z-index: 1000; }
+.pv-page { padding-bottom: 60px; }
+details.accordion_container > summary { list-style: revert; }
+.pv-check { margin: 12px 0 18px; border: 2px dashed #b08bd9; background: #faf7ff; padding: 8px 12px; font-size: 13px; }
+.pv-check summary { cursor: pointer; font-weight: bold; }
+.pv-check table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+.pv-check th, .pv-check td { border: 1px solid #ddd; padding: 4px 8px; vertical-align: top; text-align: left; }
+.pv-check th { width: 14em; background: #f1ecf8; white-space: nowrap; }
+.pv-ok { color: #2e7d32; }
+.pv-bad { color: #c62828; }
+.pv-warn { color: #c62828; margin: 6px 0; }
+.pv-broken { background: #ffe0e0; border-bottom: 2px solid #c62828; }
+.pv-issn { color: #777; }
+.pv-mail { color: #06c; }
+.pv-caption { font-size: 14px; line-height: 22px; margin: -18px 0 24px; }
+.pv-caption.pv-caption-top { margin: 24px 0 -12px; }
+.pv-table .pv-data-table { margin: 0 auto; border-collapse: collapse; font-size: 13px; }
+.pv-data-table th, .pv-data-table td { border: 1px solid #ccc; padding: 2px 6px; }
+.pv-table { overflow-x: auto; cursor: auto; }
+.pv-table-foot { text-align: left; font-size: 12px; padding: 4px 8px; }
+.pv-formula { display: flex; justify-content: center; align-items: center; margin: 16px 0; position: relative; }
+.pv-formula-body img { max-width: 100%; }
+.pv-formula-label { position: absolute; right: 0; }
+.pv-inline-graphic { vertical-align: middle; max-height: 1.6em; }
+.pv-level3 { font-style: italic; }
+.pv-boxed { border: 1px solid #ccc; padding: 8px 12px; margin: 16px 0; }
+.pv-fn { font-size: 12px; }
+.pv-float-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+.pv-float-card { border: #ebebeb solid 1px; padding: 6px; font-size: 12px; }
+.pv-float-card img { max-width: 100%; max-height: 180px; display: block; margin: 0 auto 4px; }
+.pv-float-card .pv-caption { margin: 0; font-size: 12px; line-height: 17px; }
+.pv-float-card table { font-size: 9px; }

@@ -288,3 +288,9 @@
   `_bundle` も同じ形にした (13〜23 巻の 133 本を `_bundle/<巻>_<号>/rev_<記事識別子>.zip` に．`_backup` の記事の組と一致)．
   **`_bundle` の 13(2)〜23(2) の 128 本の XML に，控えの書誌 (論文番号・原稿種別・カナ・`approved`・`license`) と文献の DOI を足した** (`merge_backup.registered`・`build.attach_web_dois` と同じ規則．作業ディレクトリはユーザが削除ずみなので zip の XML を直接直した．DTD の誤りは増えていない)．
   号ごとの `download_*.zip` 51 個を記事ごとに分け，837 ファイルの名前・CRC・サイズの一致を確かめて元を消した (15(1) は同じものが2つ)．
+
+## 2026-09-29
+
+- 2026-09-28 21:17 (MATUTOSI_DP)
+  **控え (記事ダウンロードの zip) から全文 XML の作業を始める `from_backup.py` をスキルに足した** (ユーザ指示．24 巻以降の控えから full-XML を作るため)．
+  fetch_jstage.py + merge_backup.py の代わりに，控えから meta.yaml (登録ずみの書誌つき)・refs_web.txt・PDF を用意し，ウェブを読まない．24 巻以降の 178 本で落ちず，24(1):1 で手順 0→1→3→4 が通った．

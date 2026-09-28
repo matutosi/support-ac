@@ -99,14 +99,14 @@ def split_ja_names(auth):
     # 「土壌標準分析・測定法委員会（編）」のように，団体名そのものに「・」が入ることがある
     # (20(1):31 の B1)．全体が団体の字で終わり，人名らしい部分 (空白を含むか 4 字以下) が
     # 1つも無いときは，分けずに丸ごと1つの団体名とみなす
-    whole = re.sub(r"[\s　]*[（(]?\s*(編著|編|監修)\s*[）)]?[\s　]*$", "", auth.strip())
+    whole = re.sub(r"[\s　]*[（(]?\s*(編著|編|監修)\s*[）)]?[\s　]*$", "", auth.strip().rstrip("．.，,"))
     pieces = [x.strip() for x in whole.split("・") if x.strip()]
     # ただし「北海道千歳市・たくぎん総合研究所」のように，前の部分がそれだけで団体として
     # 完結しているときは，2つの団体なので分ける (18(2):107 の B6)
     if (len(pieces) > 1 and ORG_END.search(whole)
             and not any(re.search(r"[\s　]", x) or len(x) <= 4 for x in pieces)
             and not any(ORG_END.search(x) for x in pieces[:-1])):
-        return [(0, len(auth))]
+        return [(0, len(auth.rstrip("．.，,")))]
     parts, pos = [], 0
     for part in re.split(r"(・)", auth):
         if part != "・" and part.strip():
@@ -127,7 +127,32 @@ def split_ja_names(auth):
             out[-1][2] = incomplete_org(auth[out[-1][0]:b].strip(), nxt)
             continue
         out.append([a, b, incomplete_org(auth[a:b].strip(), nxt)])
-    return [(a, b) for a, b, _ in out]
+    # 名前の後ろの句読点 (「遠山三樹夫．1994．」の「．」) は名前に入れず区切りの側に置く
+    # (13(1):1 の B1．姓が「遠山三樹夫．」になり，「愛媛県編．」は団体と判定されなかった)
+    spans = []
+    for a, b, _ in out:
+        while b > a and auth[b - 1] in "．.，,":
+            b -= 1
+        spans.append((a, b))
+    return spans
+
+
+# 姓と名の分かっている和名 (全論文の meta.yaml の著者欄から main() で集める)．
+# 紙面に空白の無い「遠山三樹夫」を，文字は変えずに <surname>遠山</surname><given-names>三樹夫</given-names> にする
+KNOWN_JA = {}
+
+
+def load_known_ja(work):
+    """jstage/work/<巻>/<開始ページ>/meta.yaml の著者の和名 [姓, 名] を集める．"""
+    for p in Path(work).resolve().parent.parent.glob("*/*/meta.yaml"):
+        try:
+            m = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+        except Exception:
+            continue
+        for a in m.get("authors") or []:
+            nj = (a.get("name") or {}).get("ja")
+            if nj and len(nj) == 2 and nj[0] and nj[1]:
+                KNOWN_JA.setdefault(nj[0] + nj[1], (nj[0], nj[1]))
 
 
 def tag_ja_name(name):
@@ -154,6 +179,10 @@ def tag_ja_name(name):
         sep = name.strip()[len(sur):len(name.strip()) - len(giv)]
         return (f'<string-name name-style="eastern" xml:lang="ja"><surname>{esc(sur)}</surname>{esc(sep)}'
                 f'<given-names>{esc(giv)}</given-names></string-name>{esc(suffix)}')
+    known = KNOWN_JA.get(name.strip())
+    if known:
+        return (f'<string-name name-style="eastern" xml:lang="ja"><surname>{esc(known[0])}</surname>'
+                f'<given-names>{esc(known[1])}</given-names></string-name>{esc(suffix)}')
     return (f'<string-name name-style="eastern" xml:lang="ja"><surname>{esc(name.strip())}</surname>'
             f'</string-name>{esc(suffix)}')
 
@@ -1081,6 +1110,7 @@ def main():
         elif mode == "body":
             main_blocks.append(b)
 
+    load_known_ja(work)
     refs = [Ref(i + 1, t) for i, t in enumerate(ref_lines)]
     # 番号だけでなく，枠に書いた呼び名 (「付表1」「Photo 1」) でも引けるように対応表にする
     floats = {b[1]: b[2] for b in main_blocks if b[0] in ("fig", "table", "formula")}

@@ -107,7 +107,9 @@ def registered(xml, meta):
 
 def write_block(meta_path, block, source):
     """meta.yaml の `registered:` の節を置き換える (無ければ末尾に足す)．ほかの行とコメントは触らない．"""
-    lines = meta_path.read_text(encoding="utf-8").splitlines()
+    raw = meta_path.read_bytes().decode("utf-8")
+    nl = "\r\n" if "\r\n" in raw else "\n"   # 元の改行を保つ (Windows で既定の改行にすると全行が変わる)
+    lines = raw.splitlines()
     keep, skip = [], False
     for ln in lines:
         if re.match(r"^registered:", ln) or ln.startswith("# J-STAGE の登録ずみの書誌 (merge_backup.py"):
@@ -122,7 +124,7 @@ def write_block(meta_path, block, source):
     body = yaml.safe_dump({"registered": block}, allow_unicode=True, sort_keys=False, default_flow_style=None)
     keep += ["", f"# J-STAGE の登録ずみの書誌 (merge_backup.py が控え {source} から書いた．build.py が XML に出す)",
              body.rstrip()]
-    meta_path.write_text("\n".join(keep) + "\n", encoding="utf-8")
+    meta_path.write_bytes((nl.join(keep) + nl).encode("utf-8"))
 
 
 def main():

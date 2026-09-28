@@ -1,7 +1,7 @@
 ---
 name: pdf-to-jstage-xml
-description: 学会誌の論文 PDF (原稿なし) から，J-STAGE に登載する全文 XML (JATS 1.1，FULL-J) を作るスキル。書誌と引用文献は J-STAGE の記事ページ (日英) から取り，本文・図表は PDF の文字の位置と書体から下書きを作り (スキャンした旧号は行の並びから)，AI がページ画像と照合して直し，スクリプトで XML に組んで DTD と J-STAGE の規則で検証し，登載用の zip にまとめる。本文の「著者 年」形式の引用と「図1」「表1」は自動でリンクする。雑誌ごとの違い (資料コード・原稿種別・体裁の変遷・スキャンの透かしなど) は journals/<資料コード>.yaml と同名の .md に置き、スキル本体は雑誌によらない。いまは植生学会誌 (vegsci) の設定だけがあり、他誌は journals/ に足す。ユーザーが「J-STAGE の XML を作って」「全文 XML にして」「PDF から JATS に」「植生学会誌の論文を全文 HTML に」などと言ったときに使う。
-argument-hint: "<論文.pdf または記事の URL> [--review none|opus|fable|sonnet]"
+description: 学会誌の論文 PDF (原稿なし) から，J-STAGE に登載する全文 XML (JATS 1.1，FULL-J) を作るスキル。書誌と引用文献は J-STAGE の現状の控え (記事ダウンロードの zip．PDF も入っている) があればそこから，無ければ J-STAGE の記事ページ (日英) から取り，本文・図表は PDF の文字の位置と書体から下書きを作り (スキャンした旧号は行の並びから)，AI がページ画像と照合して直し，スクリプトで XML に組んで DTD と J-STAGE の規則で検証し，登載用の zip にまとめる。本文の「著者 年」形式の引用と「図1」「表1」は自動でリンクする。雑誌ごとの違い (資料コード・原稿種別・体裁の変遷・スキャンの透かしなど) は journals/<資料コード>.yaml と同名の .md に置き、スキル本体は雑誌によらない。いまは植生学会誌 (vegsci) の設定だけがあり、他誌は journals/ に足す。ユーザーが「J-STAGE の XML を作って」「全文 XML にして」「PDF から JATS に」「植生学会誌の論文を全文 HTML に」「控え (_backup) から full-xml を作って」などと言ったときに使う。
+argument-hint: "<控えの zip・論文.pdf・記事の URL のどれか> [--review none|opus|fable|sonnet]"
 ---
 
 # 論文 PDF から J-STAGE の全文 XML を作る
@@ -65,7 +65,27 @@ argument-hint: "<論文.pdf または記事の URL> [--review none|opus|fable|so
 
 `S=.claude/skills/pdf-to-jstage-xml/scripts`，作業ディレクトリを `W` とする．
 
-### 0. 書誌と引用文献を J-STAGE から取る (登載ずみの記事のとき)
+### 0. 書誌と引用文献を用意する (登載ずみの記事のとき)
+
+**J-STAGE の現状の控え (記事ダウンロードの zip) があれば，それから始める** (2026-09-28 ユーザ指示．植生学会誌の 24 巻以降はこちら)．
+控えは `jstage/work/_backup/<巻>_<号>/<記事識別子>.zip` (取り方は `jstage/backup.md`)．
+
+```
+python $S/from_backup.py jstage/work/_backup/<巻>_<号>/<記事識別子>.zip      # 1本
+python $S/from_backup.py jstage/work/_backup/<巻>_<号>/*.zip                 # 号の全部
+```
+
+- **ウェブを読まない**．控えの XML に書誌・英文要旨・キーワード・引用文献が，zip に全文 PDF が入っている．
+- 作業ディレクトリ `W` は既定で `jstage/work/<巻>/<開始ページ 3 桁>/` (1本のときだけ `--out` で変えられる)．
+  `W/<記事識別子>.pdf`・`meta.yaml`・`refs_web.txt` ができる．`meta.yaml` は下の fetch_jstage.py と同じ形で，
+  末尾に merge_backup.py と同じ `registered:` の節 (原稿種別・論文番号・カナ・`approved`・`license`) が付く．
+  **下の fetch_jstage.py と merge_backup.py は要らない**．
+- 既にある `meta.yaml` と PDF は上書きしない (`meta.backup.yaml` に書く．`--force` で上書き)．
+- 控えに本文 (`<body>`) がある記事は，全文 XML が既に載っているので飛ばす．
+- 控えに無いもの: `article_type` (JATS の記事の種類) と連絡著者は手順 1 が PDF から埋め，所属の住所は手順 2 の 9 で AI が紙面から書く．
+  受付日・受理日は控えにあれば入る (旧号には無い)．
+
+控えが無いときは，J-STAGE の記事ページから取る．
 
 ```
 python $S/fetch_jstage.py <記事の URL> --out W
@@ -76,7 +96,7 @@ python $S/fetch_jstage.py <記事の URL> --out W
 - `meta.yaml` (題名・著者・所属・巻号・日付・DOI・キーワード・英文要旨・著作権) と
   `refs_web.txt` (登録ずみの引用文献) ができる．
 - 未登載の記事なら飛ばし，手順 1 のあとで `meta.pdf.yaml` をもとに `meta.yaml` を書く．
-- **J-STAGE の現状の控え** (記事ダウンロードの zip．`jstage/backup.md`) があれば，登録ずみの書誌を引き継ぐ．
+- 記事ページから取ったあとで控えが手に入ったときは，登録ずみの書誌だけを引き継ぐ (控えから始めたときは要らない)．
 
   ```
   python $S/merge_backup.py W <控えの zip>
@@ -483,7 +503,6 @@ SKILL.md には雑誌固有のことを書かない．
 - 電子付録・Graphical Abstract・ファンド情報は組まない．
 - 本文の脚注 (`<fn>`) は扱わない．**紙面に脚注があるときは，参照している段落の直後に
   独立した段落として本文に入れる** (内容を落とさないため．15(2):147 でそうした)．
-- 引用文献の DOI (`<pub-id>`) は付けない (J-STAGE は付けると引用リンクが増えると勧めている)．
 
 ## 経緯と根拠
 

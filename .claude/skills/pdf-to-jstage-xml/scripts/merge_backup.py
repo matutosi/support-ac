@@ -4,7 +4,7 @@
     python merge_backup.py <作業ディレクトリ> <控えの zip>
 
 控えの zip は，編集登載システムの「記事ダウンロード」(形式「J-STAGE」) で落としたもの
-(`jstage/work/_backup/<巻>/<号>/download_<日時>.zip`．手順は jstage/backup.md)．
+(`jstage/work/_backup/<巻>_<号>/<記事識別子>.zip`．号ごとの zip も読める．手順は jstage/backup.md)．
 meta.yaml の article_id で記事を探し，次を meta.yaml の末尾の `registered:` に書く
 (何度走らせても，その節を置き換えるだけ)．build.py がこの節を XML に出す．
 

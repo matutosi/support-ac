@@ -21,6 +21,9 @@ J-STAGE の論文の一覧の取得と，論文 PDF から全文 XML を作る�
   - `backup.md` … **J-STAGE の現状の控え方** (編集登載システムの「記事ダウンロード」を使う)
   - `pdf_to_jstage_xml.md` … PDF を J-STAGE 用の XML にする方法の調査
   - `requirements.txt` … J-STAGE 関係の依存 (直下のものとは分けてある)
+  - `preview_tool/` … 全文 XML の zip から J-STAGE の全文 HTML に似せたプレビューを手元で作る (`preview.py`)．
+    `compare.py` で J-STAGE が作った全文 HTML (記事ダウンロードの zip の `<記事識別子>.html`) と比べられる．
+    見本 `_sample/` と出力 `out/` は追跡しない．使い方は `preview_tool/README.md`
   - `work/<巻>/<開始ページ>/` … スキルの作業ディレクトリ (追跡しない．開始ページは 3 桁: `13/001/`)．論文の PDF もこの中に置く．
     出力は `out/` (XML と対応表 `manifest.json`) と `<記事識別子>.zip` だけ
 - `.claude/skills/pdf-to-jstage-xml/` … 論文 PDF から J-STAGE の全文 XML を作るスキル (手順は `SKILL.md`)
@@ -101,6 +104,10 @@ J-STAGE の論文の一覧の取得と，論文 PDF から全文 XML を作る�
 
 ### 現在の状態
 
+- 2026-09-28 14:56 (このセッション，MATUTOSI_DP)
+  **J-STAGE の全文 HTML のプレビューを手元で作る `jstage/preview_tool/` を作った** (`preview.py`・`compare.py`)．J-STAGE が作った全文 HTML と比べ，
+  43(1) の 7 本で文献を除く全単位 (見出し・段落・リンク・画像・目次) が一致．手元の 133 本で落ちず，警告 0．
+
 - 2026-09-28 10:31〜 (このセッション，MATUTOSI_DP)
   **控え (13(1)) の書誌を引き継ぐ `merge_backup.py` を作り**，所属の住所を `<addr-line>` に分け，和名の文献の句読点と姓名の分け方を直した (13(1) の 5 本ほか．DTD 妥当・エラー 0)．
   **公開中の記事は一括アップロードで更新できず (183E)，記事訂正 (履歴なし) の全文XML (ZIP) で上げると決まった** (公開日は翌日以降)．登録ずみの DOI を文献に足した (13(1) で 28 件)．
@@ -108,15 +115,6 @@ J-STAGE の論文の一覧の取得と，論文 PDF から全文 XML を作る�
 - 2026-09-26 10:16 (このセッション，MATUTOSI_DP)
   **名札 (`nameplate.py`) の日付と会場を計 5mm 左へ移した** (`x + 65*mm` → `x + 60*mm`．2mm と 3mm の2回)．congress_vs の第31回の名札で右に寄りすぎていたため．
   congress_vs の `tools/nametag.py` はこの配置に合わせてある．
-
-- 2026-09-25 (このセッション，web．worktree `../support-ac-23`・ブランチ `claude/vol23`)
-  **植生学会誌 23 巻 (15本．訂正記事 2 本を含む) の全文 XML を作り終えた**．15 本とも **DTD 妥当・エラー 0 件**，独立検証は 15 本とも sonnet
-  (23(1):69 は表1 の約 750 セルを XML で組んだのでユーザに確かめ，sonnet が選ばれた)．採否は各 `review/triage.md`．
-  登載用の zip は `jstage/work/23/<開始ページ>/` と，まとめた **`jstage/work/_bundle/23/vegsci.zip`** (15 本・129 ファイル・59MB)．
-  独立検証が見つけた**内容の誤りは 1 件**で，作成役が紙面の人名「森本幸祐」を本人の正しい名「幸裕」に直していた (原文の誤りを直す事故の 3 例目．戻した)．
-  **`build.py` を 10 件・`validate.py`・`review_pack.py` を 1 件ずつ直した** (文献の先頭の「*」印・文献一覧の注記・下線 `__…__`・合併号の巻 `**7, 8**` など．
-  22 巻 12 本は変化なし)．連絡著者は脚注の E-mail から入れ，連絡先の住所の脚注は入れない形にそろえた．くわしくは `journals/vegsci.md` の 23 巻の節．
-  22 巻は同じ日に `vol22-zip` ブランチで zip を受け渡し，ユーザが手元に取り込んだ．
 
 - それ以前は [notes/history.md](notes/history.md) を見る．
 

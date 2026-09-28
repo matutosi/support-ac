@@ -1460,9 +1460,13 @@ def build_front(meta, prof, abstract_ja, refs, floats):
         o.append("</contrib>")
     for af in meta["affiliations"]:
         o.append(f'<aff-alternatives id="aff{af["id"]}">')
+        # 住所は <institution> (機関名) に入れず <addr-line> に書く (メタデータ項目一覧 82・85．
+        # addr-line は全文 HTML にも書誌の画面にも出ない)．meta.yaml では addr: {ja: …, en: …}
+        addr = af.get("addr") or {}
         for lg in ("ja", "en"):
             if af.get(lg):
-                o.append(f'<aff xml:lang="{lg}"><institution>{esc(af[lg])}</institution>'
+                al = f"<addr-line>{esc(addr[lg])}</addr-line>" if addr.get(lg) else ""
+                o.append(f'<aff xml:lang="{lg}"><institution>{esc(af[lg])}</institution>{al}'
                          f'<country country="{af.get("country", "JP")}">'
                          f'{country_name(af.get("country", "JP"), lg)}</country></aff>')
         o.append("</aff-alternatives>")

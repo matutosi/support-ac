@@ -199,6 +199,16 @@ python $S/extract.py W/<記事識別子>.pdf --journal <資料コード> --out W
    - 本文の「式(1)」「式 1」「(1)式」は自動で `<xref>` になる (番号の合う `:::formula` があるときだけ)．
 8. **図表の位置**: `:::fig`・`:::table`・`:::formula` の枠は，初めて参照する段落の後ろへ動かす (J-STAGE の指定)．
 9. **書誌**: `meta.yaml` を `pages/p001.png` と照合する．英語の氏名の姓・名の分け方，所属の対応．
+   - **所属の `ja`・`en` は機関名だけ**にする (`<institution>` は「機関名」．メタデータ項目一覧 82)．
+     紙面の所属に住所 (市・郵便番号・国) が組み込まれていれば，`addr:` に分ける．`<addr-line>` になる
+     (項番 85．全文 HTML にも書誌の画面にも出ない)．国は `country:` の国コードから表示される．
+     ```yaml
+     - id: 2
+       en: Institute for Basin Ecosystem Studies, Gifu University
+       addr:
+         en: Gifu 501-11, Japan
+       country: JP
+     ```
    - **著者の脚注** (「現所属：…」「Present address: …」) は `meta.yaml` に次のように書く．
      `<author-notes>` の `present-address` になる (本文の脚注 `<fn>` とは別物)．
      ```yaml

@@ -76,6 +76,18 @@ python $S/fetch_jstage.py <記事の URL> --out W
 - `meta.yaml` (題名・著者・所属・巻号・日付・DOI・キーワード・英文要旨・著作権) と
   `refs_web.txt` (登録ずみの引用文献) ができる．
 - 未登載の記事なら飛ばし，手順 1 のあとで `meta.pdf.yaml` をもとに `meta.yaml` を書く．
+- **J-STAGE の現状の控え** (記事ダウンロードの zip．`jstage/backup.md`) があれば，登録ずみの書誌を引き継ぐ．
+
+  ```
+  python $S/merge_backup.py W <控えの zip>
+  ```
+
+  `meta.yaml` の末尾に `registered:` の節 (原稿種別・論文番号 `manuscript`・著者名のカナ・最終査読日 `approved`・`license`) を書き，
+  `build.py` がそれを XML に出す．何度走らせても節を置き換えるだけ．
+  **原稿種別は控えの値を正とする** (2026-09-28 ユーザ確定．`category` より優先)．
+  ほかは J-STAGE の「XML データフォーマットガイドライン (JATS1.1 版)」第 2.4 版にしたがい，
+  ISSN-L・誌名の略称 (ダウンロード時にシステムが足す)・`custom-meta` (仕様に無い)・`epub-j-stage` (仕様の値は `epub`)・
+  著作権表示の先頭の `&copy` (上げ直すときは削除する) は引き継がない．引用文献の正は PDF のまま．
 
 ### 1. PDF から下書きを作る
 

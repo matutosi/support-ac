@@ -1405,9 +1405,14 @@ def build_front(meta, prof, abstract_ja, refs, floats):
          f'<publisher-name xml:lang="ja">{esc(prof["publisher"]["ja"])}</publisher-name>',
          f'<publisher-name xml:lang="en">{esc(prof["publisher"]["en"])}</publisher-name>',
          "</publisher>", "</journal-meta>", "<article-meta>"]
+    # J-STAGE の登録ずみの書誌 (merge_backup.py が控えから meta.yaml に書いたもの)
+    reg = meta.get("registered") or {}
     if meta.get("doi"):
         o.append(f'<article-id pub-id-type="doi">{esc(meta["doi"])}</article-id>')
-    cat = meta.get("category") or {}
+    if reg.get("manuscript"):
+        o.append(f'<article-id pub-id-type="manuscript">{esc(reg["manuscript"])}</article-id>')
+    # 原稿種別は控えの値を正とする (2026-09-28 ユーザ確定)
+    cat = reg.get("category") or meta.get("category") or {}
     if cat.get("ja") or cat.get("en"):
         o.append("<article-categories>")
         for lg in ("ja", "en"):
@@ -1442,6 +1447,11 @@ def build_front(meta, prof, abstract_ja, refs, floats):
         if ne:
             o.append(f'<name name-style="western" xml:lang="en"><surname>{esc(ne[0])}</surname>'
                      f'<given-names>{esc(ne[1])}</given-names></name>')
+        # カナは姓と名を1つの <name> に入れる (ガイドライン 3.1.12 の例．控えは姓と名が別の <name> に分かれている)
+        kana = (reg.get("kana") or [])[i] if i < len(reg.get("kana") or []) else None
+        if kana and kana[0]:
+            gv = f"<given-names>{esc(kana[1])}</given-names>" if len(kana) > 1 and kana[1] else ""
+            o.append(f'<name name-style="eastern" xml:lang="ja-Kana"><surname>{esc(kana[0])}</surname>{gv}</name>')
         o.append("</name-alternatives>")
         if a.get("email"):
             o.append(f"<address><email>{esc(a['email'])}</email></address>")
@@ -1482,17 +1492,24 @@ def build_front(meta, prof, abstract_ja, refs, floats):
     lp = meta.get("lpage") or meta["fpage"]
     o.append(f"<fpage>{esc(str(meta['fpage']))}</fpage><lpage>{esc(str(lp))}</lpage>")
     h = meta.get("history") or {}
-    if any(h.values()):
+    has_approved = "approved" in reg
+    if any(h.values()) or has_approved:
         o.append("<history>")
         for k in ("received", "rev-recd", "accepted"):
             if h.get(k):
                 o.append(date_xml("date", f'date-type="{k}"', h[k]))
+        # 最終査読日 (査読済みの印)．日付が無ければ空で出す (ガイドライン 3.1.30 の C)
+        if has_approved:
+            o.append(date_xml("date", 'date-type="approved"', reg["approved"]) if reg["approved"]
+                     else '<date date-type="approved"><day></day><month></month><year></year></date>')
         o.append("</history>")
     cp = meta.get("copyright") or {}
     st, ho = cp.get("statement") or {}, cp.get("holder") or {}
-    if st.get("ja") and st.get("en"):
-        year = re.search(r"\d{4}", st["ja"])
+    has_cp = bool(st.get("ja") and st.get("en"))
+    if has_cp or reg.get("license"):
         o.append("<permissions>")
+    if has_cp:
+        year = re.search(r"\d{4}", st["ja"])
         o.append(f'<copyright-statement xml:lang="ja">{esc(st["ja"])}</copyright-statement>')
         o.append(f'<copyright-statement xml:lang="en">{esc(st["en"])}</copyright-statement>')
         if year:
@@ -1500,6 +1517,10 @@ def build_front(meta, prof, abstract_ja, refs, floats):
         if ho.get("ja") and ho.get("en"):
             o.append(f'<copyright-holder xml:lang="ja">{esc(ho["ja"])}</copyright-holder>')
             o.append(f'<copyright-holder xml:lang="en">{esc(ho["en"])}</copyright-holder>')
+    # 認証の状態 (ガイドライン 3.1.31．書かなければ資料の設定を引き継ぐ)
+    if reg.get("license"):
+        o.append(f'<license license-type="{attr(reg["license"])}"><license-p/></license>')
+    if has_cp or reg.get("license"):
         o.append("</permissions>")
 
     ab = meta.get("abstract") or {}

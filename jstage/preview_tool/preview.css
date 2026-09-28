@@ -80,8 +80,9 @@ details.accordion_container > summary { list-style: revert; }
 .pv-level3 { font-style: italic; }
 .pv-boxed { border: 1px solid #ccc; padding: 8px 12px; margin: 16px 0; }
 .pv-fn { font-size: 12px; }
-.pv-float-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
-.pv-float-card { border: #ebebeb solid 1px; padding: 6px; font-size: 12px; }
-.pv-float-card img { max-width: 100%; max-height: 180px; display: block; margin: 0 auto 4px; }
-.pv-float-card .pv-caption { margin: 0; font-size: 12px; line-height: 17px; }
-.pv-float-card table { font-size: 9px; }
+/* 最下部の図の一覧は 1 列 (J-STAGE の公式のプレビューと同じ．2026-09-28 ユーザ指示) */
+.pv-float-grid { display: block; }
+.pv-float-card { border: #ebebeb solid 1px; padding: 10px; margin: 0 0 24px; text-align: center; }
+.pv-float-card img { max-width: 100%; display: block; margin: 0 auto 8px; }
+.pv-float-card .pv-caption { margin: 0; text-align: left; font-size: 14px; line-height: 22px; }
+.pv-float-card table { margin: 0 auto 8px; }

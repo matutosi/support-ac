@@ -11,7 +11,7 @@
     - 文献: J-STAGE は XML の文字ではなく，登録した文献のデータから組むので，
       「Krieger , A.M.」のように空白が入ったり，XML の「DufrêneMLegendreP1997」が
       「Dufrêne M Legendre P 1997」になったりする (43(1) の 7 本で 5 本)．文献は一致を求めない
-    - 目次の「Figures (n)」: J-STAGE では JS が後から足す (保存したページには出ている)．比べない
+    - 目次の「Figures (n)」「図 (n)」: J-STAGE では JS が後から足す (保存したページには出ている)．比べない
 
 2026-09-28 に植生学会誌 43(1) の 7 本で，文献を除く全単位が一致した
 (見出し・段落・本文のリンク・画像・図表の id・目次)．
@@ -49,7 +49,8 @@ def units(root):
                frag.xpath(".//div[contains(@class,'global-image-holder')]/img")],
         "図表の id": [e.get("id") for e in frag.xpath(".//div[contains(@class,'global-image-holder')]")],
         "目次": [t for t in (norm(e.text_content()) for e in
-                           root.xpath("//ul[@id='article-overiew-section-list']//a")) if t and not t.startswith("Figures")],
+                           root.xpath("//ul[@id='article-overiew-section-list']//a"))
+                if t and not t.startswith(("Figures", "図 ("))],
     }
 
 

@@ -47,13 +47,11 @@ JSTAGE_CSS = ["bootstrap_fullhtml.min.css", "style.css", "common-elements-style.
 WORDS = {
     "ja": dict(author_info="著者情報", details="詳細", journal="ジャーナル", free="フリー",
                ppub="発行日", received="受付日", epub="J-STAGE公開日", accepted="受理日",
-               early="早期公開日", revised="改訂日", figs="Figures",
-               figs_tables="Figures &amp; tables", corresp="責任著者",
+               early="早期公開日", revised="改訂日", corresp="責任著者",
                issue=lambda y, v, i, f, l: f"{y} 年 {v} 巻 {i} 号 p. {f}-{l}" if l and l != f else f"{y} 年 {v} 巻 {i} 号 p. {f}"),
     "en": dict(author_info="Author information", details="Details", journal="JOURNAL", free="FREE ACCESS",
                ppub="Published", received="Received", epub="Released on J-STAGE", accepted="Accepted",
-               early="Advance online publication", revised="Revised", figs="Figures",
-               figs_tables="Figures &amp; tables", corresp="Corresponding author",
+               early="Advance online publication", revised="Revised", corresp="Corresponding author",
                issue=lambda y, v, i, f, l: f"{y} Volume {v} Issue {i} Pages {f}-{l}" if l and l != f else f"{y} Volume {v} Issue {i} Page {f}"),
 }
 
@@ -608,13 +606,15 @@ def build_page(art, page_lang, css_links, base_css):
             r.notes.append(f"文献の見出し: XML の「{plain(xt)}」ではなく「{'引用文献' if ja else 'References'}」と出る見込み "
                            "(J-STAGE は文献の多数の言語で決める．XML に題がある場合は未確認)")
 
-    # ---- 図表の一覧 (J-STAGE では JS が作る「Figures」)
+    # ---- 図表の一覧 (J-STAGE では JS が作る)．1 列に並べる．
+    # 見出しは記事の言語で決まる: 日本語の記事は「図」，英語の記事は「Figures」(43(1):1 は英語の記事で「Figures (10)」)
     if r.floats:
-        r.nav.append(("#figures-tables-wrap", f"{WORDS[page_lang]['figs']} ({len(r.floats)})"))
+        figs = "図" if alang == "ja" else "Figures"
+        r.nav.append(("#figures-tables-wrap", f"{figs} ({len(r.floats)})"))
         cards = "".join(f'<div class="pv-float-card"><a href="#{attr(fid)}">{img}</a>{cap}</div>'
                         for fid, lab, cap, img in r.floats)
         main.append(f'<div id="figures-tables-wrap"><div class="section-title-noborder-18">'
-                    f'{WORDS[page_lang]["figs_tables"]}</div><div class="pv-float-grid">{cards}</div></div>')
+                    f'{figs}</div><div class="pv-float-grid">{cards}</div></div>')
 
     # ---- 点検 (J-STAGE の画面に出ない項目と警告)
     check = check_panel(art, r, page_lang)

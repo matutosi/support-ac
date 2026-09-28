@@ -68,7 +68,7 @@ J-STAGE の論文の一覧の取得と，論文 PDF から全文 XML を作る�
   直接 zip へ入れる (`scripts/manifest.py`)．`_bundle/` のまとめた zip は登載が済んだら消してよい．
 - **まとめた zip は `jstage/work/_bundle/<巻>/vegsci.zip` に置く** (試しの組は `_bundle/trial/`．2026-09-24 ユーザ指示)．
   zip の名前は J-STAGE の規定 (編集登載編 別紙2) で `{資料コード}.zip` なので，巻の別はフォルダで付ける．
-- **全文 XML で更新する前に，J-STAGE の現状を `jstage/work/_backup/<巻>/` に控える** (2026-09-24 ユーザ指示．
+- **全文 XML で更新する前に，J-STAGE の現状を `jstage/work/_backup/<巻>/<号>/` に控える** (2026-09-24 ユーザ指示．号の段は 2026-09-28 に足した．
   もとに戻せるように)．手元の zip (`_bundle`) は J-STAGE 版と違うので控えにならない．
   **編集登載システムの「記事ダウンロード」(形式「J-STAGE」) で取る**．手順は `jstage/backup.md`．
   手元のスクリプトで作る方法 (`backup_bibj.py`・`backup_jstage.py`) は，公式の手順があるので 2026-09-24 にやめて削除した．

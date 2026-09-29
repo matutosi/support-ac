@@ -77,6 +77,9 @@ python $S/from_backup.py jstage/work/_backup/<巻>_<号>/*.zip                 #
 
 - **ウェブを読まない**．控えの XML に書誌・英文要旨・キーワード・引用文献が，zip に全文 PDF が入っている．
 - 作業ディレクトリ `W` は既定で `jstage/work/<巻>/<開始ページ 3 桁>/` (1本のときだけ `--out` で変えられる)．
+  **作業の根をリポジトリの外に置くときは `--root <作業の根>`** を渡し，`<作業の根>/<巻>/<開始ページ 3 桁>/` に作る (号の全部でも使える)．
+  置き場所はプロジェクトの `CLAUDE.md` の決めごとに従う．`build.py` は `W` の 2 つ上の下にある全論文の `meta.yaml` から和名の辞書を作るので，作業の根は号ごとに変えない．
+  控えがリポジトリの外にあれば，`meta.yaml` の `source` には控えの絶対パスが入る (`apply_backup.py` がそこから開く)．
   `W/<記事識別子>.pdf`・`meta.yaml`・`refs_web.txt` ができる．`meta.yaml` は下の fetch_jstage.py と同じ形で，
   末尾に merge_backup.py と同じ `registered:` の節 (原稿種別・論文番号・カナ・`approved`・`license`) が付く．
   **下の fetch_jstage.py と merge_backup.py は要らない**．

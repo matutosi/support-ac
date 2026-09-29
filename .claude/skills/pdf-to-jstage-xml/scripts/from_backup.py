@@ -1,16 +1,19 @@
 """J-STAGE の現状の控え (記事ダウンロードの zip) から，作業ディレクトリの書誌と PDF を用意する (手順 0: 控えから)．
 
 使い方:
-    python from_backup.py <控えの zip> [<控えの zip> ...] [--out <作業ディレクトリ>] [--force]
+    python from_backup.py <控えの zip> [<控えの zip> ...] [--out <作業ディレクトリ> | --root <作業の根>] [--force]
 
     例: python from_backup.py jstage/work/_backup/24_1/24_KJ00005989683.zip
         python from_backup.py jstage/work/_backup/32_1/*.zip
+        python from_backup.py <作業の根>/_backup/26_2/*.zip --root <作業の根>   # リポジトリの外に作るとき
 
 控えの zip は `jstage/work/_backup/<巻>_<号>/<記事識別子>.zip` (手順は jstage/backup.md)．
 fetch_jstage.py (記事ページから) と merge_backup.py (控えの登録ずみの書誌) の代わりに，これ1本で済む．
 **ウェブを読まない** (控えに書誌も引用文献も入っている．2026-09-28 ユーザ指示で 24 巻以降はこちら)．
 
 作業ディレクトリは既定で jstage/work/<巻>/<開始ページ 3 桁>/ (zip が複数のときは --out を使えない)．
+--root を渡すと <作業の根>/<巻>/<開始ページ 3 桁>/ に作る (作業の根をリポジトリの外に置くとき．
+build.py は作業ディレクトリの2つ上の下にある全論文の meta.yaml から和名の辞書を作るので，号ごとに根を変えない)．
 書くもの:
     <記事識別子>.pdf  控えの全文 PDF (J-STAGE に載っているもの)．既にあれば触らない
     meta.yaml        書誌．fetch_jstage.py と同じ形に，merge_backup.py の `registered:` の節を足したもの．
@@ -158,7 +161,7 @@ def refs_text(root):
     return out
 
 
-def one(zpath, out, force):
+def one(zpath, out, force, work_root=None):
     zpath = Path(zpath)
     art = zpath.stem
     with zipfile.ZipFile(zpath) as z:
@@ -175,11 +178,13 @@ def one(zpath, out, force):
         return
     journal = xn.split("/")[0]
     prof = yaml.safe_load((SKILL_DIR / "journals" / f"{journal}.yaml").read_text(encoding="utf-8"))
-    rel = zpath.resolve().relative_to(REPO).as_posix() if zpath.resolve().is_relative_to(REPO) else zpath.name
+    # 控えがリポジトリの外 (作業の根を外に置いたとき) なら絶対パスで書く (apply_backup.py が source から開く)
+    rel = zpath.resolve().relative_to(REPO).as_posix() if zpath.resolve().is_relative_to(REPO) else zpath.resolve().as_posix()
     meta = build_meta(root, prof, rel)
     meta["article_id"] = art
     if out is None:
-        out = REPO / "jstage" / "work" / str(meta["volume"]) / f"{int(meta['fpage']):03d}"
+        base = Path(work_root) if work_root else REPO / "jstage" / "work"
+        out = base / str(meta["volume"]) / f"{int(meta['fpage']):03d}"
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
 
@@ -214,12 +219,15 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("zips", nargs="+", help="控えの zip (_backup/<巻>_<号>/<記事識別子>.zip)")
     ap.add_argument("--out", help="作業ディレクトリ (zip が1つのときだけ．既定は jstage/work/<巻>/<開始ページ>/)")
+    ap.add_argument("--root", help="作業の根 (<作業の根>/<巻>/<開始ページ>/ に作る．既定はリポジトリの jstage/work)")
     ap.add_argument("--force", action="store_true", help="meta.yaml を上書きする・本文のある控えも扱う")
     args = ap.parse_args()
     if args.out and len(args.zips) > 1:
         sys.exit("--out は zip が1つのときだけ使える")
+    if args.out and args.root:
+        sys.exit("--out と --root は一緒に使えない")
     for z in args.zips:
-        one(z, args.out, args.force)
+        one(z, args.out, args.force, args.root)
 
 
 if __name__ == "__main__":

@@ -294,3 +294,7 @@
 - 2026-09-28 21:17 (MATUTOSI_DP)
   **控え (記事ダウンロードの zip) から全文 XML の作業を始める `from_backup.py` をスキルに足した** (ユーザ指示．24 巻以降の控えから full-XML を作るため)．
   fetch_jstage.py + merge_backup.py の代わりに，控えから meta.yaml (登録ずみの書誌つき)・refs_web.txt・PDF を用意し，ウェブを読まない．24 巻以降の 178 本で落ちず，24(1):1 で手順 0→1→3→4 が通った．
+
+- 2026-09-28 22:30 (MATUTOSI_DP)
+  **24(1) の 6 本の全文 XML を控えから作った** (ユーザ指示)．6 本とも DTD 妥当・規則のエラー 0・注意 0，独立検証 (sonnet) で A・B の指摘 0．`_bundle/24_1/rev_<記事識別子>.zip`．
+  控えを使い切るため `apply_backup.py` (文献を控えの .txt と XML で組み直し・要旨の差し替え) を足し，`extract_scan.py` (見出しの頭の飾り記号)・`build.py` (接頭辞の無い DOI．13〜23 巻の `_bundle` にも 99 件足した) を直した．

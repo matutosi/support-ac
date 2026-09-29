@@ -253,11 +253,14 @@ def main():
         for sub in rl.findall("ref-list"):
             for p in sub.findall("p"):
                 o.append(f"- (注記) {inline(p, refs)}")
-    n_x = len(list(r.iter("xref")))
+    # 本文の [→…] と数が合うように，著者と所属を結ぶリンク (aff) は別に数える
+    # (25(1):63 で検証役が「リンク 55 なのに 50 しかない」と報告した．差は aff の 5)
+    xs = list(r.iter("xref"))
+    n_aff = sum(1 for x in xs if x.get("ref-type") == "aff")
     o += ["", "## 数", "",
           f"- 段落 {len(list(r.find('body').iter('p')))}，図 {len(list(r.iter('fig')))}，表 {len(list(r.iter('table-wrap')))}，"
           f"式 {len(list(r.iter('disp-formula')))}，"
-          f"文献 {len(list(back.iter('ref')))}，リンク {n_x}"]
+          f"文献 {len(list(back.iter('ref')))}，本文などのリンク {len(xs) - n_aff} (ほかに著者と所属のリンク {n_aff})"]
 
     out = work / "review"
     out.mkdir(exist_ok=True)

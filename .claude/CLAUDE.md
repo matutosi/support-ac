@@ -27,7 +27,8 @@ J-STAGE の論文の一覧の取得と，論文 PDF から全文 XML を作る�
   - `work/<巻>/<開始ページ>/` … スキルの作業ディレクトリ (追跡しない．開始ページは 3 桁: `13/001/`)．論文の PDF もこの中に置く．
     出力は `out/` (XML と対応表 `manifest.json`) と `<記事識別子>.zip` だけ．
     **2026-09-29 に `jstage/work/` の中身 (21・24〜26 巻の作業ディレクトリ，控え `_backup/` 318 本，登載用の zip `_bundle/` 165 本，`_sample/`) を
-    `D:/matu/workOLD/Done/support-ac/jstage/work/` へ移した** (ユーザ指示．1.9G)．いまの `jstage/work/` は空．新しい号の作業ディレクトリはここに作る
+    `D:/matu/workOLD/Done/support-ac/jstage/work/` へ移した** (ユーザ指示．1.9G)．リポジトリの `jstage/work/` はもう無い．
+    **今後の出力 (作業ディレクトリ・`_bundle`) も移した先に作る** (下の決めごと)
 - `.claude/skills/pdf-to-jstage-xml/` … 論文 PDF から J-STAGE の全文 XML を作るスキル (手順は `SKILL.md`)
 - `data/adress.txt` … 植生学会第30回大会の領収書の文面の控え (実際の値なので追跡しない)
 - `requirements.txt` … web アプリの依存 (版を固定してある．Streamlit Cloud が使う)
@@ -45,6 +46,12 @@ J-STAGE の論文の一覧の取得と，論文 PDF から全文 XML を作る�
 ### J-STAGE の全文 XML 化 (スキル `pdf-to-jstage-xml`)
 
 2026-09-19 に congress_vs から移した決めごと．
+
+- **【決定 2026-09-29・ユーザ指示】出力は `D:/matu/workOLD/Done/support-ac/jstage/work/` (以下「作業の根」) に作る**．
+  作業ディレクトリは `<作業の根>/<巻>/<開始ページ 3 桁>/`，登載用の zip は `<作業の根>/_bundle/<巻>_<号>/rev_<記事識別子>.zip`，控えは `<作業の根>/_backup/`．
+  `from_backup.py` に `--root <作業の根>` を渡す (手元のパスはコードに書かない．公開リポジトリのため)．
+  ほかのスクリプトは作業ディレクトリを引数で受けるので，そのパスを渡せばよい．`build.py` の和名の辞書 (`KNOWN_JA`) は作業ディレクトリの 2 つ上の下を集めるので，
+  作業の根をそろえておけば 21・24 巻以降の meta.yaml も辞書に入る．
 
 - **J-STAGE の記事ページは，1本につき日本語版と英語版を1回ずつ読むだけにする** (2026-09-19 ユーザ指示)．
   文献一覧の AJAX (タブの読み込み) を順に叩くのは止められた．読んだページは作業ディレクトリの
@@ -133,11 +140,12 @@ J-STAGE の論文の一覧の取得と，論文 PDF から全文 XML を作る�
 ### 次にやること
 
 - **24 巻以降の全文 XML を，控えから作る** (2026-09-28)．**24(1) の 6 本・24(2) の 8 本・25(1) の 6 本・25(2) の 5 本・26(1) の 5 本は済んだ** (2026-09-29 15:24)．次は 26(2)．
-  号ごとに `from_backup.py D:/matu/workOLD/Done/support-ac/jstage/work/_backup/<巻>_<号>/*.zip` → `extract.py` → `apply_backup.py` → 手順 2〜5 (作成役と検証役を 1 本ずつ別のエージェントで)．
-  (控えは 2026-09-29 に移した先にある．作業ディレクトリは `from_backup.py` の既定どおり `jstage/work/<巻>/<開始ページ>/` にできる)．
+  号ごとに `from_backup.py D:/matu/workOLD/Done/support-ac/jstage/work/_backup/<巻>_<号>/*.zip --root D:/matu/workOLD/Done/support-ac/jstage/work` → `extract.py` → `apply_backup.py` → 手順 2〜5 (作成役と検証役を 1 本ずつ別のエージェントで)．
+  (作業ディレクトリは `D:/matu/workOLD/Done/support-ac/jstage/work/<巻>/<開始ページ>/` にできる．2026-09-29 の決めごと)．
   残りは 26(2)〜42(2) の 148 本 (43(1) の 7 本は全文 XML が登載ずみ)．25 巻以降は，体裁の変わり目 (設定の `eras`．31(2) から DTP) は分かっているが，実際に抽出を通したのは 24(1)〜26(1) だけ．
-  **作成役を起動する前に EnterWorktree し，控え (移した先の `_backup/<巻>_<号>/`) と `dtd/` を worktree へ写す** (途中で隔離するとサブエージェントのシェルが止まる．25(2) で起きた)．
-  出来上がりは `jstage/work/_bundle/<巻>_<号>/rev_<記事識別子>.zip` に置く (26(1) までの 165 本は移した先の `_bundle/` にある)．**24(1) の報告から直したスクリプトと，まだ直していないものは `journals/vegsci.md` の 24 巻の節の末尾**．
+  **作成役を起動する前に EnterWorktree し，`dtd/` を worktree へ写す** (途中で隔離するとサブエージェントのシェルが止まる．25(2) で起きた．
+  作業の根はリポジトリの外なので，控えと作業ディレクトリは写さなくてよい．隔離したままリポジトリの外へ書けるかは 26(2) で確かめる)．
+  出来上がりは `D:/matu/workOLD/Done/support-ac/jstage/work/_bundle/<巻>_<号>/rev_<記事識別子>.zip` に置く (26(1) までの 165 本もここにある)．**24(1) の報告から直したスクリプトと，まだ直していないものは `journals/vegsci.md` の 24 巻の節の末尾**．
   **【判断待ち】訂正記事の題名**: 24(2):188 は紙面どおり「訂正」にしたが，前例 23(1):80・23(2):176 は控えの長い題名のまま．どちらにそろえるか (記事訂正で上げる場合は XML の書誌は反映されないので実害は無い)．
 - **控えを `merge_backup.py` で引き継ぐ** (2026-09-28)．**13〜23 巻の `_bundle` 133 本は済んだ** (13(1) は朝に組み直し，残りは夜に zip の XML へ直接足した)．**控えは 13(1)〜43(1) の全 61 号・318 本がそろった** (2026-09-28 夜)．
   控えは `D:/matu/workOLD/Done/support-ac/jstage/work/_backup/<巻>_<号>/<記事識別子>.zip` (2026-09-29 に移した)．各記事で `merge_backup.py` → `build.py` → `validate.py`．上げるのは各記事の `<記事識別子>.zip` (まとめた zip は公開中の記事には使えない)．

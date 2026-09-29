@@ -992,7 +992,8 @@ def title_xml(text, floats):
     t = put_nolink(t, held)
     s = inline(esc(t))
     s = re.sub(r"\x04(F\d+)\x02(.*?)\x03", r'<xref ref-type="fig" rid="\1">\2</xref>', s)
-    s = re.sub(r"\x04(T\d+)\x02(.*?)\x03", r'<xref ref-type="table" rid="\1">\2</xref>', s)
+    # 付表の枠 (TA1) も表として引く (T\d+ だけだと制御文字が残り XML が壊れた．28(1):49)
+    s = re.sub(r"\x04(T[A-Z]?\d+)\x02(.*?)\x03", r'<xref ref-type="table" rid="\1">\2</xref>', s)
     return s
 
 
@@ -1006,7 +1007,7 @@ def para_xml(text, refs, floats, where):
     s = inline(esc(t))
     s = re.sub(r"\x01(B\d+)\x02(.*?)\x03", r'<xref ref-type="bibr" rid="\1">\2</xref>', s)
     s = re.sub(r"\x04(F\d+)\x02(.*?)\x03", r'<xref ref-type="fig" rid="\1">\2</xref>', s)
-    s = re.sub(r"\x04(T\d+)\x02(.*?)\x03", r'<xref ref-type="table" rid="\1">\2</xref>', s)
+    s = re.sub(r"\x04(T[A-Z]?\d+)\x02(.*?)\x03", r'<xref ref-type="table" rid="\1">\2</xref>', s)
     s = re.sub(r"\x05(E\d+)\x02(.*?)\x03", r'<xref ref-type="disp-formula" rid="\1">\2</xref>', s)
     return s
 

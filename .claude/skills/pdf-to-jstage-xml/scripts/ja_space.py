@@ -35,7 +35,8 @@ from pathlib import Path
 
 J = "[ぁ-ゖァ-ヺー一-鿿々〆]"  # 中黒「・」(U+30FB) は含めない
 A = "[A-Za-z0-9]"
-REF_HEADINGS = ("# 引用文献", "# 文献", "# References", "# REFERENCES")
+REF_HEADINGS = ("# 引用文献", "# 文献", "# References", "# REFERENCES", "# REFFERENCES", "# REFERENCE",
+                "# Literature cited", "# Literature Cited")  # journals/vegsci.yaml の refs と同じ
 
 
 def fix_text(t):

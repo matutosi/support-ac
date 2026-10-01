@@ -143,6 +143,9 @@ def check_rules(doc, xml_path):
         for s in [el.text or "", el.tail or ""]:
             # URL の中の「~」(「http://www13.ocn.ne.jp/~minnagis/」．22(1):25) は印ではない
             s = re.sub(r"https?://\S+", "", s)
+            # 数の前の「約」の「~」(「~300 m」「~20 times」．33(2):53 は body.md で `\~` と書く) は印ではない．
+            # 閉じ忘れの下付き「~0~」は数の後ろに「~」が来るので残る
+            s = re.sub(r"(?<![~〜\d])~(?=\d[\d.,]*(?![\d.,~]))", "", s)
             for mm in re.finditer(r".{0,20}(\^|\{\{|\}\}|(?<![~〜\d])~(?![~〜]))\S{0,20}", s):
                 errs.append(("エラー", f"印が文字のまま残っている (閉じ忘れ): …{mm.group(0).strip()}…"))
 

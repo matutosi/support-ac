@@ -1119,8 +1119,11 @@ def main():
         elif mode == "refs" and b[0] == "p":
             # 文献一覧の注記の行 (「（*印を付したものは直接参照できなかった）」．23(1):1・23(2):137) は
             # 文献にしない．括弧で始まり年を持たない行．「*: This title is a tentative translation …」の
-            # ように印とコロンで始まる行も同じ (33(2):53)
-            if re.match(r"^(?:[（(]|\\?\*\s*[:：])", b[1]) and not YEAR.match(b[1]):
+            # ように印とコロンで始まる行も同じ (33(2):53)．コロンの無い「*  This title …」(35(2):49) は，
+            # 印の後ろが空白で，行に年が無いときだけ注記にする (文献の頭の「*」の印は名前に接している)
+            if ((re.match(r"^(?:[（(]|\\?\*\s*[:：])", b[1])
+                 or (re.match(r"^\\?\*\s+\S", b[1]) and not re.search(r"(?:1[89]|20)\d\d", b[1])))
+                    and not YEAR.match(b[1])):
                 ref_notes.append(b[1])
             else:
                 ref_lines.append(b[1])

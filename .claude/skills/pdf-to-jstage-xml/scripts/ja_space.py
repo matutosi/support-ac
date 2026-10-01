@@ -50,12 +50,13 @@ def fix_text(t):
     return t
 
 
-PAREN = re.compile(r"(?m)^[ \t]*(?:[-*+]|\d{1,2}\.)[ \t]+|(?<=[^\s:]) +（")
+PAREN = re.compile(r"(?m)^[ \t]*(?:[-*+]|\d{1,2}\.|[A-Za-z_][\w-]*:)[ \t]+|(?<=\S) +（")
 
 
 def tight_paren(t):
     """全角の「（」の前の半角の空白を詰める．行頭の字下げ・箇条の印 (「- 」「1. 」) の後ろと，
-    「鍵: 」のコロンの後ろは残す (Markdown と YAML の書き方を壊さない)．"""
+    行頭の「鍵: 」の後ろは残す (Markdown と YAML の書き方を壊さない)．文中のコロンの後ろは詰める
+    (英文要旨の「types:（1）」．35(1):35)．"""
     return PAREN.sub(lambda m: "（" if m.group(0).endswith("（") else m.group(0), t)
 
 

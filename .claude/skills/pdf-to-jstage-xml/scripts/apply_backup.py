@@ -288,7 +288,11 @@ def main():
         names_ = z.namelist()
         xml = z.read(next(n for n in names_ if n.endswith(f"/{art}.xml")))
         tn = next((n for n in names_ if n.endswith(f"/{art}.txt")), None)
-        txt = z.read(tn).decode("utf-8") if tn else ""
+        raw = z.read(tn) if tn else b""
+        try:
+            txt = raw.decode("utf-8")
+        except UnicodeDecodeError:   # 35(1):35 の控えの .txt は Shift_JIS だった
+            txt = raw.decode("cp932")
     prof = es.load_profile(meta.get("journal") or "vegsci")
     sec = prof["sections"]
     names = lambda k: [sec[k]] if isinstance(sec[k], str) else list(sec[k])

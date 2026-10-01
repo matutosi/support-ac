@@ -57,7 +57,14 @@ def tight_paren(t):
     """全角の「（」の前の半角の空白を詰める．行頭の字下げ・箇条の印 (「- 」「1. 」) の後ろと，
     行頭の「鍵: 」の後ろは残す (Markdown と YAML の書き方を壊さない)．文中のコロンの後ろは詰める
     (英文要旨の「types:（1）」．35(1):35)．"""
-    return PAREN.sub(lambda m: "（" if m.group(0).endswith("（") else m.group(0), t)
+    t = PAREN.sub(lambda m: "（" if m.group(0).endswith("（") else m.group(0), t)
+    # 閉じの「）」の後ろに和文が続くときの半角の空白も詰める (「Miyawaki（1960） がまとめた」．
+    # 文字の層では 34(2) から現れる．紙面に空きは無い．2026-10-02 ユーザ指示)．
+    # 箇条の番号「（1） 十分」は紙面に空きがあるので残す (35(2):117)
+    return CLOSE.sub(lambda m: m.group(0) if m.group(1) else "）", t)
+
+
+CLOSE = re.compile("（(\\d{1,2})） +|） +(?=" + J + ")")
 
 
 def fix_line(line):

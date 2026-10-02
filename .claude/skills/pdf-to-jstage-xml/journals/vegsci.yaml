@@ -72,6 +72,9 @@ layout:
   heading2_size: 9.9        # 「水田面積の変遷と歴史性」(ゴシック体・本文と同じ大きさ)
   italic_font: Italic       # この文字列を含む書体は *斜体* にする
   caption_pattern: '^(図|表|Fig\.|Table)\s*(\d+)'
+  # 付表の題 (引用文献の後ろに続く組成表など)．番号の無い「付表」(31(2):179) は 1 とみる．
+  # 枠は TA1，画像は appendix1.png (extract_scan.py と同じ)．文献の節もここで終える
+  appendix_pattern: '^(付表|Appendix|APPENDIX)\s*(\d*)'
 
 # 特別な扱いをする見出し
 # 節の見出しの文言．号によって言い方が違い，英文の論文もある (13(1):51 など) ので並びで書く

@@ -123,7 +123,37 @@ def line_font(spans, lay):
     return font if font and bold >= n * 0.6 else main
 
 
-def auto_layout(doc, lay):
+def refs_sizes(doc, lay, refs_titles):
+    """引用文献の見出しから後ろ (次の大見出しか付表の題の手前まで) の，本文より小さい行の字の大きさを数える．
+
+    引用文献の後ろに付表 (組成表など．5.7pt や 7.1pt) が続くと，最終ページの字の大きさは付表のものになる
+    (31(2):179・33(2):65・35(1):1・35(1):89)．文献の字の大きさは文献の行そのものから決める．
+    """
+    cnt = collections.Counter()
+    on = False
+    app = lay.get("appendix_pattern")
+    for p in doc:
+        mid = p.rect.width / 2
+        ls = sorted(((0 if l["bbox"][0] < mid - 10 else 1, l["bbox"][1], l)
+                     for b in p.get_text("dict")["blocks"] for l in b.get("lines", [])),
+                    key=lambda x: (x[0], x[1]))
+        for _col, _y, l in ls:
+            t = "".join(s["text"] for s in l["spans"]).strip()
+            if head_font(line_font(l["spans"], lay), lay):
+                if t.startswith(lay["heading1_prefix"]):
+                    if on:
+                        return cnt              # 文献の次の大見出し (英文の論文の「■ 要約」)
+                    on = t.lstrip(lay["heading1_prefix"]).strip() in refs_titles
+                elif on and app and re.match(app, t):
+                    return cnt                  # 付表の題
+                continue
+            size = round(max(s["size"] for s in l["spans"]), 1)
+            if on and len(t) > 10 and size < lay["body_size"] - lay["size_tol"]:
+                cnt[size] += 1
+    return cnt
+
+
+def auto_layout(doc, lay, refs_titles=()):
     """字の大きさ・柱と脚注の位置を，この PDF の統計から決める (設定の値は既定値)．
 
     年代で組み方が変わる (植生学会誌: 2014 年は本文 9.9pt，2025 年は 9.2pt) ため．
@@ -153,12 +183,18 @@ def auto_layout(doc, lay):
         lay["heading2_size"] = lay["body_size"]
     if h1:
         lay["heading1_size"] = h1.most_common(1)[0][0]
-    last = collections.Counter(
-        round(max(s["size"] for s in l["spans"]), 1)
-        for b in doc[-1].get_text("dict")["blocks"] for l in b.get("lines", [])
-        if len("".join(s["text"] for s in l["spans"]).strip()) > 10)
-    if last and last.most_common(1)[0][0] < lay["body_size"]:
-        lay["ref_size"] = last.most_common(1)[0][0]
+    rs = refs_sizes(doc, lay, refs_titles)
+    if sum(rs.values()) >= 3:
+        lay["ref_size"] = rs.most_common(1)[0][0]
+    else:
+        # 文献の見出しが見つからない・文献が本文と同じ大きさ: 最終ページの最頻の大きさ (付表が続くと誤る)
+        last = collections.Counter(
+            round(max(s["size"] for s in l["spans"]), 1)
+            for b in doc[-1].get_text("dict")["blocks"] for l in b.get("lines", [])
+            if len("".join(s["text"] for s in l["spans"]).strip()) > 10)
+        if last and last.most_common(1)[0][0] < lay["body_size"]:
+            lay["ref_size"] = last.most_common(1)[0][0]
+            REPORT.append("引用文献の字の大きさを最終ページから決めた (文献の節の行が数えられなかった)．確かめる")
     # 柱: 2ページ目以降の本文の最上行より上．脚注: 本文の最下行より下
     tops, bottoms = [], []
     for p in pages:
@@ -396,15 +432,32 @@ def float_regions(page, lines, lay, is_body):
     return clusters
 
 
+def cap_match(text, lay):
+    """図題・表題・付表の題なら (種類, 番号, 付表か, 呼び名) を返す．
+
+    付表 (「付表1」「Appendix 1」．引用文献の後ろの組成表など) は表として扱い，Table 1 と番号が重なるので
+    枠を TA1，画像を appendix1.png にする (extract_scan.py と同じ)．番号の無い「付表」(31(2):179) は 1 とみる．
+    """
+    m = re.match(lay["caption_pattern"], text)
+    if m:
+        kind = "fig" if m.group(1) in ("図", "Fig.") else "table"
+        return kind, int(m.group(2)), False, None
+    if lay.get("appendix_pattern"):
+        m = re.match(lay["appendix_pattern"], text)
+        if m:
+            return "table", int(m.group(2) or 1), True, m.group(0).strip()
+    return None
+
+
 def mark_captions(lines, lay):
     """キャプション (ゴシック体の「図1.」「表1.」) とその続きの行に印を付け，本文から外す．
 
     2025 年の号はキャプションが本文と同じ大きさなので，大きさでは本文と分けられない．
     続きの行は，すぐ下にあり，キャプションの行頭より右から始まる (ぶら下げ字下げ) もの．
     """
-    pat = re.compile(lay["caption_pattern"])
-    for cap in [l for l in lines if head_font(l["font"], lay) and pat.match(l["text"])]:
+    for cap in [l for l in lines if head_font(l["font"], lay) and cap_match(l["text"], lay)]:
         cap["cap"] = True
+        cap["appx"] = cap_match(cap["text"], lay)[2]
         last = cap
         for l in sorted((l for l in lines if l["y0"] > cap["y0"]), key=lambda l: l["y0"]):
             if l.get("cap"):
@@ -417,9 +470,8 @@ def mark_captions(lines, lay):
 
 
 def caption_of(cluster, lay):
-    pat = re.compile(lay["caption_pattern"])
     caps = [e for e in cluster["elems"] if e[0] == "text" and head_font(e[2]["font"], lay)
-            and pat.match(e[2]["text"])]
+            and cap_match(e[2]["text"], lay)]
     if not caps:
         return None
     cap = min(caps, key=lambda e: e[2]["y0"])[2]
@@ -436,9 +488,8 @@ def caption_of(cluster, lay):
             last = l
         else:
             break
-    m = pat.match(cap["text"])
-    kind = "fig" if m.group(1) in ("図", "Fig.") else "table"
-    return {"kind": kind, "num": int(m.group(2)), "line": cap, "text": text.strip(),
+    kind, num, appx, label = cap_match(cap["text"], lay)
+    return {"kind": kind, "num": num, "appx": appx, "label": label, "line": cap, "text": text.strip(),
             "cap_rect": pymupdf.Rect(cap["x0"], cap["y0"], last["x1"], last["y1"])}
 
 
@@ -510,7 +561,7 @@ def main():
             REPORT.append(f"この巻号の原稿種別の印字は「{era['category']}」のはず (設定の eras より)")
 
     doc = pymupdf.open(args.pdf)
-    lay = auto_layout(doc, lay)
+    lay = auto_layout(doc, lay, as_list(prof["sections"]["refs"]))
     tol = lay["size_tol"]
 
     def is_h1(l):
@@ -528,6 +579,7 @@ def main():
             or is_h1(l) or is_h2(l)
 
     in_refs = [False]
+    refs_closed = [False]   # 付表の題で文献の節を終えた (以後は大見出しだけを本文とみる)
     started = False
     md = []          # 出力する行
     para = ""        # 組み立て中の段落
@@ -538,6 +590,7 @@ def main():
     page1_txt = []
     fig_count = {"fig": 0, "table": 0}
     pending_floats = []
+    appendix_floats = []   # 付表の枠 (本文の末尾，謝辞・摘要・引用文献の節の前にまとめて置く)
     last_float = {}   # 直前の図表 (続きのページを同じ図表に足すため)
     seen_floats = {}  # (種類, 番号) → 図表 (「表1（続き）」を見分けるため)
     captions = {}     # 図表の題 (見開きで後から伸びるので，最後に body.md へ入れる)
@@ -549,6 +602,7 @@ def main():
         (植生学会誌 37(1) 表2)．縦に続く表 (42(2) 表1) は，前のページと高さの範囲が同じでも見開きではない．
         """
         prev["parts"] += 1
+        prev["last_page"] = pno   # 続きが何ページも続く付表 (35(1):89 は 8 ページ) の，次のページの上端の判定に使う
         cap_rects = [cap["cap_rect"]] if cap else []
         spread = False
         if how is None and pno == prev["page"] + 1 and prev["cap_rows"]:
@@ -569,7 +623,7 @@ def main():
                 REPORT.append(f"p{pno}: {prev['key']} の図題が見開きで続く ({len(more)} 行をつないだ)．確かめる")
         content = content_rect(c, cap)
         sub = "figs" if prev["kind"] == "fig" else "tables"
-        name = f"{prev['kind'] if prev['kind'] == 'fig' else 'table'}{prev['num']}_{prev['parts']}.png"
+        name = f"{prev['stem']}_{prev['parts']}.png"
         clip = trim_caption(content, cap_rects, page)
         page.get_pixmap(dpi=args.dpi_fig if prev["kind"] == "fig" else 200, clip=clip).save(out / IMG[sub] / name)
         REPORT.append(f"p{pno}: {prev['key']} の続き ({how or ('見開き (横に続く)' if spread else '縦に続く')})"
@@ -606,10 +660,21 @@ def main():
 
         mark_captions(lines, lay)
         # 図表 (引用文献の見出しがあるページでは，文献の字の大きさも本文として扱う)
-        refs_here = in_refs[0] or any(
+        refs_here = not refs_closed[0] and (in_refs[0] or any(
             is_h1(l) and l["text"].strip().lstrip(lay["heading1_prefix"]).strip() in as_list(prof["sections"]["refs"])
-            for l in lines)
+            for l in lines))
+        # 文献の後ろに付表が続くときは，付表の題で文献の節を終える (付表の種名の行を文献にしない．35(1):1 など)．
+        # 付表の題より後ろ (段・高さの順) の行は本文にしない
+        appx_caps = [l for l in lines if l.get("appx")]
+        close_at = min(((column_of(l, mid), l["y0"]) for l in appx_caps), default=None) if refs_here else None
+        if close_at:
+            REPORT.append(f"p{pno}: 付表の題で引用文献の節を終えた ({min(appx_caps, key=lambda l: l['y0'])['text'][:20]})")
+
         def is_body_page(l):
+            if refs_closed[0] and not is_h1(l):
+                return False
+            if close_at and (column_of(l, mid), l["y0"]) >= close_at and not is_h1(l):
+                return False
             return is_body(l) or refs_here and near(l["size"], lay["ref_size"], tol)
         clusters = float_regions(page, lines, lay, is_body_page)
         orphans = []      # キャプションの無いまとまり (前のページの図表の続きの候補)
@@ -619,27 +684,31 @@ def main():
             if txt:
                 floats_txt.append(f"===== page {pno} {'' if not cap else cap['kind'] + str(cap['num'])}")
                 floats_txt += [l["text"] for l in sorted(txt, key=lambda l: (round(l['y0']), l['x0']))]
-            if cap and (cap["kind"], cap["num"]) in seen_floats:
-                # 「表1（つづき）」: 同じ番号のキャプションが再び出たら続き
-                add_part(seen_floats[(cap["kind"], cap["num"])], page, pno, c, lines, cap, "縦に続く (キャプションあり)")
+            if cap and (cap["kind"], cap["num"], cap["appx"]) in seen_floats:
+                # 「表1（つづき）」「付表1. … （つづき）」: 同じ番号のキャプションが再び出たら続き
+                add_part(seen_floats[(cap["kind"], cap["num"], cap["appx"])], page, pno, c, lines, cap,
+                         "縦に続く (キャプションあり)")
                 continue
             if not cap:
                 orphans.append(c)
                 continue
-            kind, num = cap["kind"], cap["num"]
+            kind, num, appx = cap["kind"], cap["num"], cap["appx"]
             fig_count[kind] += 1
             content = content_rect(c, cap)
             clip = trim_caption(content, [cap["cap_rect"]], page)
-            sub, name = ("figs", f"fig{num}.png") if kind == "fig" else ("tables", f"table{num}.png")
+            stem = "appendix" if appx else kind
+            sub, name = ("figs" if kind == "fig" else "tables"), f"{stem}{num}.png"
             page.get_pixmap(dpi=args.dpi_fig if kind == "fig" else 200, clip=clip).save(out / IMG[sub] / name)
-            key = f"{kind}{num}"
+            key = f"{stem}{num}"
             captions[key] = strip_label(cap["text"], lay)
             rows = [(l["y0"], l["x0"], l["md"]) for l in lines if l.get("cap") and cap["cap_rect"].intersects(
                 pymupdf.Rect(l["x0"], l["y0"], l["x1"], l["y1"]))]
-            last_float = {"kind": kind, "num": num, "parts": 1, "page": pno, "rect": content,
+            last_float = {"kind": kind, "num": num, "parts": 1, "page": pno, "rect": content, "stem": key,
                           "cap_rows": rows, "key": key, "cap_size": cap["line"]["size"]}
-            seen_floats[(kind, num)] = last_float
-            if kind == "fig":
+            seen_floats[(kind, num, appx)] = last_float
+            if appx:
+                appendix_floats.append([f":::table TA{num} {cap['label']}", f"@@CAP {key}@@", "@image", ":::"])
+            elif kind == "fig":
                 pending_floats.append([f":::fig F{num} 図{num} {name}", f"@@CAP {key}@@", ":::"])
             else:
                 pending_floats.append([f":::table T{num} 表{num}", f"@@CAP {key}@@",
@@ -648,7 +717,8 @@ def main():
                                        "@image",
                                        f"<!-- 組版された表で容易に組めるなら: table_draft.py (page {pno}) で組み，上の @image の行を消す -->",
                                        ":::"])
-            REPORT.append(f"p{pno}: {kind}{num} の枠 {tuple(round(v) for v in clip)}")
+            REPORT.append(f"p{pno}: {key} の枠 {tuple(round(v) for v in clip)}"
+                          + (f" → tables/{name} (付表．枠は TA{num})" if appx else ""))
         if orphans and last_float:
             # キャプションの無いまとまりは1つに合わせる (表の中の散らばった字が別々のまとまりになるため)．
             # 直前の図表の次のページの上端にあるか，大きければ，その図表の続き
@@ -656,7 +726,7 @@ def main():
             for c in orphans:
                 u["rect"] |= c["rect"]
                 u["elems"] += c["elems"]
-            near_top = pno == last_float["page"] + 1 and u["rect"].y0 < lay["header_y_max"] + 60
+            near_top = pno == last_float.get("last_page", last_float["page"]) + 1 and u["rect"].y0 < lay["header_y_max"] + 60
             if near_top or u["rect"].get_area() > page.rect.get_area() * 0.25:
                 add_part(last_float, page, pno, u, lines, None, None)
 
@@ -712,9 +782,21 @@ def main():
                 para = l["md"].lstrip()
             else:
                 para = join(para, l["md"])
+        if close_at:
+            in_refs[0] = False
+            refs_closed[0] = True
     flush()
     md += [r.strip() for r in refs]
     md.append("")
+    if appendix_floats:
+        # 付表は文献の後ろのページにあるが，build.py は文献の節の中の枠を拾わない．
+        # 本文の末尾 (謝辞・摘要・引用文献などの節の見出しの前) に置く
+        special = {t for k in ("ack", "abstract", "refs") for t in as_list(prof["sections"].get(k, []))}
+        at = next((i for i, l in enumerate(md) if l.startswith("# ") and l[2:].strip() in special), len(md))
+        block = ["<!-- 付表 (紙面では引用文献の後ろ)．本文の末尾に置いた．必要なら初めて引くところへ移す -->", ""]
+        for f in appendix_floats:
+            block += f + [""]
+        md[at:at] = block
 
     md = [re.sub(r"@@CAP (\w+)@@", lambda m: captions.get(m.group(1), ""), l) for l in md]
     body_path = out / "body.md"
@@ -736,7 +818,10 @@ def main():
 
 
 def strip_label(text, lay):
-    return re.sub(lay["caption_pattern"] + r"[.．]?\s*", "", text, count=1).strip()
+    for pat in (lay["caption_pattern"], lay.get("appendix_pattern")):
+        if pat and re.match(pat, text):
+            return re.sub(pat + r"[.．]?\s*", "", text, count=1).strip()
+    return text.strip()
 
 
 # ---------------------------------------------------------------- 書誌 (PDF から)

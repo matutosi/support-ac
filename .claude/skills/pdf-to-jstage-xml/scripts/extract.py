@@ -266,11 +266,14 @@ def page_lines(page, lay):
         x0, y0, x1, y1 = l["bbox"]
         if y1 <= lay["header_y_max"]:
             continue
-        out.append(make_line(spans, lay))
-    return merge_fragments(out, lay, page.rect.width / 2)
+        out.append(make_line(spans, lay, tuple(round(v) for v in l["dir"])))
+    # 寝た行 (縦組みの表．dir が (1, 0) でない) は断片をつながない．merge_fragments は横組みの行の基準線で
+    # 同じ行を見分けるので，寝た表の最後の行と脚注の行を 1 つの行にしてしまう (35(2):109 の表1)
+    flat = [l for l in out if l["dir"] == (1, 0)]
+    return merge_fragments(flat, lay, page.rect.width / 2) + [l for l in out if l["dir"] != (1, 0)]
 
 
-def make_line(spans, lay):
+def make_line(spans, lay, direction=(1, 0)):
     x0 = min(s["bbox"][0] for s in spans)
     y0 = min(s["bbox"][1] for s in spans)
     x1 = max(s["bbox"][2] for s in spans)
@@ -282,6 +285,7 @@ def make_line(spans, lay):
         "text": "".join(s["text"] for s in spans),
         "md": spans_to_md(spans, size, lay),
         "footer": y0 >= lay["footer_y_min"],
+        "dir": direction,   # 字の進む向き ((1, 0) は横組み，(0, -1) は左に寝た行 (下から上へ読む))
     }
 
 
@@ -735,6 +739,13 @@ def attach_side_figures(clusters, caps):
         REPORT.append(f"図題 {cap['label']} の横 (近く) の図を合わせた {tuple(round(v) for v in fig)}．確かめる")
 
 
+def text_dir(elems):
+    """要素の中の行の向き (字数のいちばん多い向き)．行が無ければ (1, 0)．"""
+    count = collections.Counter()
+    for e in elems:
+        if e[0] == "text":
+            count[e[2].get("dir", (1, 0))] += len(e[2]["text"].strip())
+    return count.most_common(1)[0][0] if count else (1, 0)
 def cut_body_lines(content, cap, body_lines, mid):
     """中身の上端・下端にかかる本文の行 (段の幅の半分より長いもの) を外す．
 
@@ -786,23 +797,69 @@ def clamp_to_column(content, cap, body_lines, mid):
 
 
 FOOT_START = re.compile(r"\s*(\\\*|＊|†|‡|§|\^)")   # 脚注の行頭の印 (md で．逃がした「\*1:」「＊:」「†」・上付きの「^1^」)
+FOOT_MARK = re.compile(r"\s*([*＊†‡§]|注[:：．.\s])")   # 字の行 (md でない) の行頭の脚注の印
+# 表の最後の行の「以下省略」(32(1):37 の表3 の「The rest is omitted.」，34(1):65 の表4 の「… were omitted.」)
+OMITTED = re.compile(r"(?i)\brest (is|are) omitted|\bwere omitted\b|以下[省略]+")
 
 
-def split_table_foot(c, cap, label, lay, cont=False):
+def turn_of(direction):
+    """寝た表を横組みに起こして見るための，矩形 (x0, y0, x1, y1) の変換と，起こした向きでの「下端で切る」辺．
+
+    (0, -1) は左に寝た表 (下から上へ読む．35(2):109 の表1)．読む向きは -y，行の進む向き (起こした表の下) は +x．
+    返り値は (変換, 切る辺の名前, 起こした座標の値を実際の座標に戻す関数)．
+    """
+    if direction == (0, -1):
+        return (lambda r: (-r[3], r[0], -r[1], r[2])), "x1", (lambda v: v)
+    if direction == (0, 1):
+        return (lambda r: (r[1], -r[2], r[3], -r[0])), "x0", (lambda v: -v)
+    if direction == (-1, 0):
+        return (lambda r: (-r[2], -r[3], -r[0], -r[1])), "y0", (lambda v: -v)
+    return (lambda r: tuple(r)), "y1", (lambda v: v)
+
+
+def turn_line(l, T):
+    """行 (字の箱も) を起こした座標に移した写し (上付きの見分けも起こした向きで行う)．"""
+    def sp(s):
+        return {**s, "bbox": T(s["bbox"]), "chars": [{**ch, "bbox": T(ch["bbox"])} for ch in s.get("chars", [])]}
+    x0, y0, x1, y1 = T((l["x0"], l["y0"], l["x1"], l["y1"]))
+    return {**l, "x0": x0, "y0": y0, "x1": x1, "y1": y1, "spans": [sp(s) for s in l["spans"]]}
+
+
+def apply_cut(clip, cut):
+    """split_table_foot の返す切り位置 (辺の名前, 値) で，画像の範囲を脚注の手前までに縮める．"""
+    side, v = cut
+    if side in ("x1", "y1"):
+        setattr(clip, side, min(getattr(clip, side), v + 1.5))
+    else:
+        setattr(clip, side, max(getattr(clip, side), v - 1.5))
+    return clip
+
+
+def split_table_foot(c, cap, label, lay, cont=False, state=None):
     """表の下の罫線より下にある脚注の行を，表の画像から外して文字で返す．
 
     DTP の号 (31(2) 以降) の表は，表の本体を横罫線で閉じ，その下に脚注 (「* The number of plots …」) を置く．
     公式の見本・JATS4R はどれも脚注を <table-wrap-foot> に文字で持つので，画像は最後の横罫線までで切り，
     脚注は枠の @image の後ろに書く (32(2):1 の表1)．
-    返り値は (中身の範囲, 脚注の行 (md) の並び, 切る高さ)．分けないときは (None, None, None)．
+    90 度寝た表 (縦組みの表．行の向きが (0, -1)) は，起こした向きで同じことをする (罫線は縦の線，脚注は表の右)．
+    返り値は (中身の範囲, 脚注の行 (md) の並び, 切り位置 (辺の名前, 値))．分けないときは (None, None, None)．
     罫線が無い・罫線の下に表の行らしいもの (3 つ以上のセル) や線・画像があるときは分けない (確かめるよう書く)．
+    state (dict) に分けた結果を書く: foot は "split" (分けた)・"none" (罫線の下に何も無い)・"maybe" (脚注が画像に
+    入っている見込み．why に理由)・"unknown" (罫線が無く脚注の印も無い)．head は表題と表の間の注の行，
+    omitted は表の最後の罫線の上の「以下省略」の行．作成役への注記 (foot_notes) に使う．
     """
+    state = {} if state is None else state
     capr = cap["cap_rect"] if cap else None
-    elems = [e for e in c["elems"] if not (e[0] == "text" and e[2].get("cap"))
-             and not (capr and e[0] != "img" and capr.contains(e[1]))]
-    texts = [e for e in elems if e[0] == "text"]
-    if not texts:
+    real = [e for e in c["elems"] if not (e[0] == "text" and e[2].get("cap"))
+            and not (capr and e[0] != "img" and capr.contains(e[1]))]
+    if not any(e[0] == "text" for e in real):
         return None, None, None
+    direction = text_dir(real)   # 表の向き: 字数のいちばん多い行の向き
+    T, side, back = turn_of(direction)
+    # 起こした座標の要素 (種類, 矩形, 行, 元の要素)．寝た表の中の横組みの行 (向きの違う行) は字の箱だけを移す
+    elems = [(e[0], pymupdf.Rect(T(e[1])), turn_line(e[2], T) if e[0] == "text" else None, e) for e in real]
+    texts = [e for e in elems if e[0] == "text"]
+    turned = direction != (1, 0)
     # 横罫線: 高さの小さい線を，高さ (1pt 以内) ごとにまとめ，覆う横の長さを測る
     rows = []
     for e in elems:
@@ -827,21 +884,58 @@ def split_table_foot(c, cap, label, lay, cont=False):
                 cur[1] = max(cur[1], b)
         cover += cur[1] - cur[0]
         g["cover"], g["x0"], g["x1"] = cover, segs[0][0], max(b for _a, b in segs)
-    width = content_rect(c, cap).width
+    whole = pymupdf.Rect()
+    for e in elems:
+        whole |= e[1]
+    width = whole.width
     big = max((g["cover"] for g in rows), default=0)
     full = [g for g in rows if g["cover"] >= big * 0.9] if big >= width * 0.5 else []
     size = statistics.median(e[2]["size"] for e in texts)
-    if len(full) < 2:
-        # 罫線で閉じていない表 (縦組みの表・罫線の無い表など): 分けずに知らせる (脚注があれば画像に入ったまま)
-        if any(re.match(r"\s*[*＊†‡]", e[2]["text"]) for e in texts):
-            REPORT.append(f"{label}: 表の下の罫線が見つからず，脚注らしい行を画像に入れたまま (枠に書いていない)．確かめる")
+    where = "表 (寝た表は起こした向き) の下" if turned else "表の下"
+    kind = "縦組み" if turned else "横組み"
+    # 表題と表の間 (表の上の罫線より上) の注の行 (33(1):1 の表1，31(2):179 の付表)．表題の続きか脚注かは紙面による
+    if cap and full and not cont:
+        top = min(g["y"] for g in full)
+        cr = pymupdf.Rect(T(capr))
+        head = [e[2] for e in texts if cr.y1 - 1 < (e[1].y0 + e[1].y1) / 2 < top - 0.5]
+        # 表の中の小見出し (35(1):21 の表1 の「（a）　DBH 5 cm 未満」) を除くため，表の幅の 4 割以上の行があるときだけ
+        if head and max(cells_in_row(head, size).values()) < 3 \
+                and any(l["x1"] - l["x0"] >= width * 0.4 for l in head):
+            state["head"] = [l["text"].strip() for l in head]
+            REPORT.append(f"{label}: 表題と表の上の罫線の間に注らしい行が {len(head)} 行あり，画像に入れたまま．確かめる")
+    if len(full) == 1 and len(texts) >= 3:
+        # 罫線が 1 本だけ: 表の下の罫線 (続きのページの表は上の罫線が無い．34(1):65 の表4) とみてよいのは，
+        # 罫線が表の下のほうにあり，罫線より上の行がずっと多いとき
+        g = full[0]
+        above = [e for e in texts if (e[1].y0 + e[1].y1) / 2 < g["y"]]
+        # (図の式の分数の線などを罫線とみないよう，罫線の上に 6 行以上あり，罫線が 100pt 以上のときだけ．33(2):53 の p4)
+        if g["y"] < whole.y0 + whole.height * 0.5 or len(above) < max(6, 2 * (len(texts) - len(above))) \
+                or g["cover"] < 100:
+            full = []
+    if not full:
+        # 罫線で閉じていない表 (罫線の無い表など): 分けずに知らせる (脚注があれば画像に入ったまま)
+        tail = sorted((e[2] for e in texts), key=lambda l: l["y1"])[-3:]
+        if any(FOOT_MARK.match(l["text"]) for l in tail):
+            REPORT.append(f"{label}: {where}の罫線が見つからず，脚注らしい行を画像に入れたまま (枠に書いていない)．確かめる")
+            state.update(foot="maybe", why=f"{kind}・罫線なし")
         elif not cont:
-            REPORT.append(f"{label}: 表の下の罫線が見つからない (縦組みの表など)．脚注があれば画像に入ったまま (枠に書いていない)．確かめる")
+            REPORT.append(f"{label}: {where}の罫線が見つからない．脚注があれば画像に入ったまま (枠に書いていない)．確かめる")
+            state.update(foot="maybe" if turned else "unknown", why=f"{kind}・罫線なし")
+        else:
+            state.update(foot="unknown", why=f"{kind}・罫線なし")
         return None, None, None
     bottom = max(full, key=lambda g: g["y"])
+    # 表の最後の罫線のすぐ上の「以下省略」の行 (32(1):37 の表3)．表の一部か脚注かは紙面による
+    last = [e[2] for e in texts if (e[1].y0 + e[1].y1) / 2 < bottom["y"]]
+    if last:
+        y = max(l["y1"] for l in last)
+        row = [l for l in last if abs(l["y1"] - y) < size * 0.5]
+        if len(row) == 1 and OMITTED.search(row[0]["text"]):
+            state["omitted"] = row[0]["text"].strip()
     below = [e for e in elems if (e[1].y0 + e[1].y1) / 2 > bottom["y"] + 0.5]
     foot = sorted((e[2] for e in below if e[0] == "text"), key=lambda l: (round(l["y1"]), l["x0"]))
     if not foot:
+        state.update(foot="none")
         return None, None, None
     why = None
     if any(e[0] != "text" for e in below):
@@ -849,14 +943,45 @@ def split_table_foot(c, cap, label, lay, cont=False):
     elif any(l["x0"] < bottom["x0"] - size * 2 or l["x1"] > bottom["x1"] + size * 2 for l in foot):
         why = "罫線の下の行が表の幅からはみ出す"
     else:
-        # 同じ高さに 3 つ以上に分かれた行は表のセル (罫線の下にも表の行が続く表)
-        ys = collections.Counter(round(l["y1"] / (size * 0.6)) for l in foot)
-        if ys and max(ys.values()) >= 3:
+        if max(cells_in_row(foot, size).values(), default=0) >= 3:
             why = "罫線の下に表の行らしいもの (3 つ以上に分かれた行) がある"
     if why:
         REPORT.append(f"{label}: {why}ので，脚注を分けず画像に入れたまま．確かめる")
+        state.update(foot="maybe", why=why)
         return None, None, None
-    # 段落: 印で始まる行と，前の行が右端まで届かない (短い) ときに改める
+    paras = foot_paras(foot, size, lay)
+    out = {id(e[3]) for e in below}
+    kept = {"elems": [e for e in c["elems"] if id(e) not in out], "rect": c["rect"]}
+    REPORT.append(f"{label}: {where}の罫線 ({'x' if side[0] == 'x' else 'y'}={back(bottom['y']):.0f}) より"
+                  f"{'右' if side == 'x1' else '左' if side == 'x0' else '上' if side == 'y0' else '下'}の脚注 {len(foot)} 行を"
+                  "画像から外し，枠に文字で書いた．確かめる")
+    state.update(foot="split")
+    return content_rect(kept, cap), paras, (side, back(bottom["y"]))
+
+
+def cells_in_row(lines, size):
+    """高さ (行) ごとの，間の空いた断片の数 (表の行ならセルの数)．
+
+    同じ高さに 3 つ以上に分かれた行は表のセル (罫線の下にも表の行が続く表)．ただし小さい「＊」で行が切れた脚注
+    (「＊: 2007 年，＊＊: 2012 年，…」．33(1):15 の表4) は断片が接しているので，間の空き (字の大きさより広い) で数える．
+    """
+    rows = collections.defaultdict(list)
+    for l in lines:
+        rows[round(l["y1"] / (size * 0.6))].append(l)
+    out = {}
+    for k, ls in rows.items():
+        ls = sorted(ls, key=lambda l: l["x0"])
+        n, end = 1, ls[0]["x1"]
+        for l in ls[1:]:
+            if l["x0"] - end > size:
+                n += 1
+            end = max(end, l["x1"])
+        out[k] = n
+    return out
+
+
+def foot_paras(foot, size, lay):
+    """脚注の行 (起こした座標．上から順) を段落にする．印で始まる行と，前の行が右端まで届かない (短い) ときに改める．"""
     right = max(l["x1"] for l in foot)
     paras = []
     prev = None
@@ -869,9 +994,7 @@ def split_table_foot(c, cap, label, lay, cont=False):
         else:
             paras[-1] = join(paras[-1], md)
         prev = l
-    kept = {"elems": [e for e in c["elems"] if e not in below], "rect": c["rect"]}
-    REPORT.append(f"{label}: 表の下の罫線 (y={bottom['y']:.0f}) より下の脚注 {len(foot)} 行を画像から外し，枠に文字で書いた．確かめる")
-    return content_rect(kept, cap), paras, bottom["y"]
+    return paras
 
 
 # ---------------------------------------------------------------- 本体
@@ -931,7 +1054,8 @@ def main():
             and not re.match(lay["caption_pattern"], l["text"])
 
     def is_body(l):
-        if l.get("cap"):
+        # 寝た行 (縦組みの表・図の軸の題) は本文にしない (本文の大きさや見出しの書体の字が「## 5」のような見出しになる．34(1):65)
+        if l.get("cap") or l.get("dir", (1, 0)) != (1, 0):
             return False
         return near(l["size"], lay["body_size"], tol) or near(l["size"], lay["ref_size"], tol) and in_refs[0] \
             or is_h1(l) or is_h2(l)
@@ -953,6 +1077,7 @@ def main():
     seen_floats = {}  # (種類, 番号) → 図表 (「表1（続き）」を見分けるため)
     captions = {}     # 図表の題 (見開きで後から伸びるので，最後に body.md へ入れる)
     feet = {}         # 表の脚注 (続きのページの表は最後のページのもの．最後に body.md へ入れる)
+    foot_state = {}   # 表の脚注を分けた結果 (split_table_foot の state)．分けられなかった表に作成役への注記を書く
 
     def add_part(prev, page, pno, c, lines, cap, how):
         """前のページから続く図表の画像を足す．
@@ -964,9 +1089,10 @@ def main():
         prev["last_page"] = pno   # 続きが何ページも続く付表 (35(1):89 は 8 ページ) の，次のページの上端の判定に使う
         cap_rects = [cap["cap_rect"]] if cap else []
         spread = False
-        if how is None and pno == prev["page"] + 1 and prev["cap_rows"]:
+        # 寝た図表 (縦組みの表) の図題は高さで見開きを決められない (表の行を図題に足してしまう．34(1):23 の表2)
+        if how is None and pno == prev["page"] + 1 and prev["cap_rows"] and prev.get("cap_dir", (1, 0)) == (1, 0):
             ys = [r[0] for r in prev["cap_rows"]]
-            more = [l for l in lines if min(ys) - 3 <= l["y0"] <= max(ys) + 3
+            more = [l for l in lines if min(ys) - 3 <= l["y0"] <= max(ys) + 3 and l.get("dir", (1, 0)) == (1, 0)
                     and near(l["size"], prev["cap_size"], 0.3) and not l.get("cap")]
             if more:
                 spread = True
@@ -980,14 +1106,16 @@ def main():
                     text = join(text, r[2])
                 captions[prev["key"]] = strip_label(text, lay)
                 REPORT.append(f"p{pno}: {prev['key']} の図題が見開きで続く ({len(more)} 行をつないだ)．確かめる")
-        body_rect, foot, cut_y = split_table_foot(c, cap, f"{prev['key']} の続き", lay, cont=True) \
+        state = foot_state.setdefault(prev["key"], {})
+        state.pop("foot", None)    # 脚注の有無は最後のページで決める (表題と表の間の注 (head) は最初のページのものを残す)
+        body_rect, foot, cut_y = split_table_foot(c, cap, f"{prev['key']} の続き", lay, cont=True, state=state) \
             if prev["kind"] == "table" else (None, None, None)
         content = body_rect or content_rect(c, cap)
         sub = "figs" if prev["kind"] == "fig" else "tables"
         name = f"{prev['stem']}_{prev['parts']}.png"
         clip = trim_caption(content, cap_rects, page)
         if cut_y is not None:
-            clip.y1 = min(clip.y1, cut_y + 1.5)
+            apply_cut(clip, cut_y)
             feet[prev["key"]] = foot     # ページをまたぐ表は，最後のページの脚注を書く
         page.get_pixmap(dpi=args.dpi_fig if prev["kind"] == "fig" else 200, clip=clip).save(out / IMG[sub] / name)
         REPORT.append(f"p{pno}: {prev['key']} の続き ({how or ('見開き (横に続く)' if spread else '縦に続く')})"
@@ -1064,11 +1192,13 @@ def main():
             stem = "appendix" if appx else kind
             key = f"{stem}{num}"
             # 表の下の罫線より下の脚注は画像に入れず，枠に文字で書く
-            body_rect, foot, cut_y = split_table_foot(c, cap, key, lay) if kind == "table" else (None, None, None)
+            foot_state[key] = {}
+            body_rect, foot, cut_y = split_table_foot(c, cap, key, lay, state=foot_state[key]) \
+                if kind == "table" else (None, None, None)
             content = clamp_to_column(body_rect or content_rect(c, cap), cap, body_now, mid)
             clip = trim_caption(content, [cap["cap_rect"]], page)
             if cut_y is not None:
-                clip.y1 = min(clip.y1, cut_y + 1.5)
+                apply_cut(clip, cut_y)
                 feet[key] = foot
             sub, name = ("figs" if kind == "fig" else "tables"), f"{stem}{num}.png"
             page.get_pixmap(dpi=args.dpi_fig if kind == "fig" else 200, clip=clip).save(out / IMG[sub] / name)
@@ -1076,7 +1206,8 @@ def main():
             rows = [(l["y0"], l["x0"], l["md"]) for l in lines if l.get("cap") and cap["cap_rect"].intersects(
                 pymupdf.Rect(l["x0"], l["y0"], l["x1"], l["y1"]))]
             last_float = {"kind": kind, "num": num, "parts": 1, "page": pno, "rect": content, "stem": key,
-                          "cap_rows": rows, "key": key, "cap_size": cap["line"]["size"]}
+                          "cap_rows": rows, "key": key, "cap_size": cap["line"]["size"],
+                          "cap_dir": cap["line"].get("dir", (1, 0))}
             seen_floats[(kind, num, appx)] = last_float
             if appx:
                 appendix_floats.append([f":::table TA{num} {cap['label']}", f"@@CAP {key}@@", "@image", f"@@FOOT {key}@@", ":::"])
@@ -1172,7 +1303,7 @@ def main():
         md[at:at] = block
 
     md = [re.sub(r"@@CAP (\w+)@@", lambda m: captions.get(m.group(1), ""), l) for l in md]
-    md = [f for l in md for f in ((feet.get(l[7:-2]) or []) if l.startswith("@@FOOT ") else [l])]
+    md = [f for l in md for f in (foot_lines(l[7:-2], feet, foot_state) if l.startswith("@@FOOT ") else [l])]
     body_path = out / "body.md"
     if body_path.exists() and not args.force:
         # AI が手で直した body.md (組んだ表など) を消さない
@@ -1189,6 +1320,26 @@ def main():
     (out / "report.txt").write_text("\n".join(REPORT), encoding="utf-8")
     print(f"本文 {len(md)} 行，引用文献 {n_refs[0] + len(refs)} 件，図 {fig_count['fig']}，表 {fig_count['table']}")
     print(f"出力: {out}")
+
+
+def foot_lines(key, feet, foot_state):
+    """表の枠の @image の後ろに書く行: 分けた脚注と，プログラムで分けられなかったときの作成役への注記．
+
+    注記は <!-- … --> の 1 行 (build.py は枠の中の <!-- で始まる行を捨てる)．脚注が無いと分かるとき
+    (最後の罫線の下に何も無い・横組みの表で罫線も脚注の印も無い) は書かない．
+    """
+    st = foot_state.get(key, {})
+    out = list(feet.get(key) or [])
+    if not out and st.get("foot") == "maybe":
+        out.append(f"<!-- 脚注: 画像に脚注が入っている見込み ({st.get('why', '')})．紙面で確かめ，"
+                   "画像を脚注の手前で切り直し (crop.py)，脚注をこの下に文字で書く -->")
+    if st.get("head"):
+        out.append("<!-- 脚注: 表題と表の間に注の行があり，画像に入っている．紙面で確かめ，脚注なら画像を切り直し (crop.py)，"
+                   "この下に文字で書く (表題の続きなら表題へ) -->")
+    if st.get("omitted"):
+        out.append(f"<!-- 脚注: 表の最後の罫線の上に「{st['omitted'][:40]}」の行がある (画像に入っている)．"
+                   "脚注なら紙面で確かめ，画像を切り直し (crop.py)，この下に文字で書く -->")
+    return out
 
 
 def strip_label(text, lay):

@@ -191,7 +191,8 @@ def auto_layout(doc, lay, refs_titles=()):
                 if head_font(line_font(l["spans"], lay), lay):
                     if t.startswith(lay["heading1_prefix"]):
                         h1[size] += 1
-                elif len(t) > 10:
+                elif len(t) > 10 and l["bbox"][2] - l["bbox"][0] > p.rect.width * 0.3:
+                    # 段の幅に近い行だけを数える (表の多い論文 (32(1):95 は表が 9 つ) で，表のセルの字の大きさを本文と取り違えない)
                     cnt[size] += len(t)
     if cnt:
         lay["body_size"] = cnt.most_common(1)[0][0]

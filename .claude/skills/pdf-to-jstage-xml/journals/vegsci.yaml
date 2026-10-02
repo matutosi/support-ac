@@ -65,6 +65,8 @@ layout:
   indent_min: 5             # 行頭がこれ以上右にずれていたら段落の始まり (字下げ)
   ref_indent_max: 3         # 引用文献: 行頭のずれがこれ未満なら新しい文献 (ぶら下げ字下げ)
   heading_font: Gothic      # 見出しとキャプションの書体名に含まれる文字列
+  heading_font_latin: Bold  # 英文の論文 (本文に和文の字がほとんど無いもの) の見出しとキャプションの書体
+                            # (TimesNewRomanPS-BoldMT．大見出しの「■」だけ和文の書体．末尾の「■ 要約」は Gothic のまま)
   heading1_size: 11.3       # 「■ はじめに」
   heading1_prefix: "■"
   heading2_size: 9.9        # 「水田面積の変遷と歴史性」(ゴシック体・本文と同じ大きさ)

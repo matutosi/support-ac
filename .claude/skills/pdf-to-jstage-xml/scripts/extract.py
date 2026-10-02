@@ -79,6 +79,50 @@ def lost_dashes(page):
     return list(rects.values())
 
 
+CJK = re.compile(r"[぀-ヿ㐀-鿿＀-￯]")   # かな・漢字・全角の字
+
+
+def is_latin(pages):
+    """英文の論文か (2ページ目以降の文字に，かな・漢字・全角の字が 15% 未満)．
+
+    和文の論文の本文は明朝 (Ryumin など)，英文の論文の本文は Times で組まれる．
+    英文の論文にも和文の書体の空白や「■」はあるが，字の数では僅かなので，書体名ではなく字で数える．
+    """
+    n = cjk = 0
+    for p in pages:
+        t = re.sub(r"\s", "", p.get_text())
+        n += len(t)
+        cjk += len(CJK.findall(t))
+    return n > 0 and cjk / n < 0.15   # 31〜35 巻: 英文 1.2〜2.9%，和文 34〜76% (英文にも和文の摘要がある)
+
+
+def head_font(font, lay):
+    """見出し・キャプションの書体か (設定の heading_font は書体名に含まれる文字列．英文の論文では複数)．"""
+    return any(h in font for h in as_list(lay["heading_font"]))
+
+
+def line_font(spans, lay):
+    """行の書体名 (いちばん大きい span の書体)．
+
+    英文の論文では，大見出し「■ INTRODUCTION」の「■」と空白が和文の書体 (同じ大きさ) なので，
+    いちばん大きい span では見出しの書体にならない．空白と「■」を除いた字の 6 割以上が
+    見出しの書体 (太字) なら，その書体とみなす (本文の行の中の太字の記号「≥」などは見出しにしない)．
+    """
+    main = max(spans, key=lambda s: s["size"])["font"].split("+")[-1]
+    if not lay.get("latin") or head_font(main, lay):
+        return main
+    prefix = lay.get("heading1_prefix", "")
+    n = bold = 0
+    font = None
+    for s in spans:
+        k = len(re.sub(r"\s", "", s["text"].replace(prefix, "") if prefix else s["text"]))
+        n += k
+        if head_font(s["font"], lay):
+            bold += k
+            font = font or s["font"].split("+")[-1]
+    return font if font and bold >= n * 0.6 else main
+
+
 def auto_layout(doc, lay):
     """字の大きさ・柱と脚注の位置を，この PDF の統計から決める (設定の値は既定値)．
 
@@ -87,13 +131,19 @@ def auto_layout(doc, lay):
     lay = dict(lay)
     cnt, h1 = collections.Counter(), collections.Counter()
     pages = list(doc)[1:] or list(doc)
+    if is_latin(pages):
+        # 英文の論文: 見出しとキャプションは欧文の太字 (Times の Bold) で，大見出しの「■」だけが和文の書体
+        lay["latin"] = True
+        # 末尾の和文の要約の見出し「■ 要約」はゴシック体のままなので，和文の見出しの書体も残す
+        lay["heading_font"] = as_list(lay.get("heading_font_latin", "Bold")) + as_list(lay["heading_font"])
+        REPORT.append(f"英文の論文とみなした (本文に和文の字がほとんど無い)．見出しの書体は {lay['heading_font']} で見分ける")
     for p in pages:
         for b in p.get_text("dict")["blocks"]:
             for l in b.get("lines", []):
                 sp = max(l["spans"], key=lambda s: s["size"])
                 t = "".join(s["text"] for s in l["spans"]).strip()
                 size = round(sp["size"], 1)
-                if lay["heading_font"] in sp["font"]:
+                if head_font(line_font(l["spans"], lay), lay):
                     if t.startswith(lay["heading1_prefix"]):
                         h1[size] += 1
                 elif len(t) > 10:
@@ -169,10 +219,9 @@ def make_line(spans, lay):
     x1 = max(s["bbox"][2] for s in spans)
     y1 = max(s["bbox"][3] for s in spans)
     size = max(s["size"] for s in spans)
-    main = max(spans, key=lambda s: s["size"])
     return {
         "x0": x0, "y0": y0, "x1": x1, "y1": y1, "size": size, "spans": spans,
-        "font": main["font"].split("+")[-1],
+        "font": line_font(spans, lay),
         "text": "".join(s["text"] for s in spans),
         "md": spans_to_md(spans, size, lay),
         "footer": y0 >= lay["footer_y_min"],
@@ -354,7 +403,7 @@ def mark_captions(lines, lay):
     続きの行は，すぐ下にあり，キャプションの行頭より右から始まる (ぶら下げ字下げ) もの．
     """
     pat = re.compile(lay["caption_pattern"])
-    for cap in [l for l in lines if lay["heading_font"] in l["font"] and pat.match(l["text"])]:
+    for cap in [l for l in lines if head_font(l["font"], lay) and pat.match(l["text"])]:
         cap["cap"] = True
         last = cap
         for l in sorted((l for l in lines if l["y0"] > cap["y0"]), key=lambda l: l["y0"]):
@@ -369,7 +418,7 @@ def mark_captions(lines, lay):
 
 def caption_of(cluster, lay):
     pat = re.compile(lay["caption_pattern"])
-    caps = [e for e in cluster["elems"] if e[0] == "text" and lay["heading_font"] in e[2]["font"]
+    caps = [e for e in cluster["elems"] if e[0] == "text" and head_font(e[2]["font"], lay)
             and pat.match(e[2]["text"])]
     if not caps:
         return None
@@ -465,11 +514,11 @@ def main():
     tol = lay["size_tol"]
 
     def is_h1(l):
-        return lay["heading_font"] in l["font"] and near(l["size"], lay["heading1_size"], tol) \
+        return head_font(l["font"], lay) and near(l["size"], lay["heading1_size"], tol) \
             and l["text"].lstrip().startswith(lay["heading1_prefix"])
 
     def is_h2(l):
-        return lay["heading_font"] in l["font"] and near(l["size"], lay["heading2_size"], tol) \
+        return head_font(l["font"], lay) and near(l["size"], lay["heading2_size"], tol) \
             and not re.match(lay["caption_pattern"], l["text"])
 
     def is_body(l):
@@ -483,6 +532,8 @@ def main():
     md = []          # 出力する行
     para = ""        # 組み立て中の段落
     refs = []        # 引用文献 (1件1行)
+    last_h2 = [None]  # 直前の小見出し (英文の論文で折り返した小見出しをつなぐため)
+    n_refs = [0]     # 途中で出した引用文献の数 (後ろに大見出しが続いたとき)
     floats_txt = []
     page1_txt = []
     fig_count = {"fig": 0, "table": 0}
@@ -621,6 +672,12 @@ def main():
             if is_h1(l):
                 title = l["text"].strip().lstrip(lay["heading1_prefix"]).strip()
                 flush()
+                if in_refs[0] and refs:
+                    # 引用文献の後ろに大見出しが続く (英文の論文の末尾の「■ 要約」) ときは，文献をその見出しの前に出す
+                    md.extend(r.strip() for r in refs)
+                    md.append("")
+                    n_refs[0] += len(refs)
+                    refs.clear()
                 in_refs[0] = title in as_list(prof["sections"]["refs"])
                 md.append(f"# {title}")
                 md.append("")
@@ -637,6 +694,16 @@ def main():
                 continue
             if is_h2(l):
                 flush()
+                if lay.get("latin"):
+                    # 英文の論文: 小見出しは学名の斜体を保ち，2 行に折り返したものは 1 つにつなぐ
+                    prev = last_h2[0]
+                    if prev and md[-2:] == [prev["head"], ""] and column_of(prev["line"], mid) == col \
+                            and -l["size"] * 0.5 <= l["y0"] - prev["line"]["y1"] < l["size"] * 0.8:  # 行の箱は 1pt ほど重なる
+                        md[-2] = "## " + join(prev["head"][3:], l["md"].strip())
+                    else:
+                        md.extend([f"## {l['md'].strip()}", ""])
+                    last_h2[0] = {"head": md[-2], "line": l}
+                    continue
                 md.append(f"## {l['text'].strip()}")
                 md.append("")
                 continue
@@ -664,7 +731,7 @@ def main():
         + yaml.safe_dump(pdf_meta, allow_unicode=True, sort_keys=False, width=1000), encoding="utf-8")
     fill_meta(out / "meta.yaml", pdf_meta)
     (out / "report.txt").write_text("\n".join(REPORT), encoding="utf-8")
-    print(f"本文 {len(md)} 行，引用文献 {len(refs)} 件，図 {fig_count['fig']}，表 {fig_count['table']}")
+    print(f"本文 {len(md)} 行，引用文献 {n_refs[0] + len(refs)} 件，図 {fig_count['fig']}，表 {fig_count['table']}")
     print(f"出力: {out}")
 
 

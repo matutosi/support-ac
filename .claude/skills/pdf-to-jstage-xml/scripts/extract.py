@@ -746,6 +746,55 @@ def text_dir(elems):
         if e[0] == "text":
             count[e[2].get("dir", (1, 0))] += len(e[2]["text"].strip())
     return count.most_common(1)[0][0] if count else (1, 0)
+
+
+def grow_tables(clusters, caps):
+    """表の中身の下 (寝た表は起こした向きの下) に，間の空いた図題の無いまとまりがあれば合わせる．
+
+    表の行の間が 12pt 以上空くと (小見出しの行の前など)，表は表題の付いた上の部分と，図題の無い下の部分
+    (前のページの続きの候補) に分かれ，表の画像が上の部分だけになり，最後の罫線と脚注も取れない
+    (31(2):119 の表2，32(2):69 の表3，33(2):53 の表5)．表の幅に収まり，すぐ下 (30pt 以内) にあるものを合わせる．
+    """
+    for c in list(clusters):
+        cap = caps.get(id(c))
+        if not cap or cap["kind"] != "table" or c not in clusters:
+            continue
+        direction = text_dir(c["elems"])
+        T = turn_of(direction)[0]
+        texts = [e[2]["size"] for e in c["elems"] if e[0] == "text"]
+        size = statistics.median(texts) if texts else 8
+        tr = pymupdf.Rect(T(content_rect(c, cap)))
+        top = tr.y1      # 表題の付いた部分の下端 (これより下のものだけを合わせる)
+        got = []
+        more = True
+        while more:
+            more = False
+            for o in clusters:
+                if o is c or o in got or caps.get(id(o)):
+                    continue
+                r = pymupdf.Rect(T(o["rect"]))
+                gap = r.y0 - tr.y1
+                # 合わせた部分と横に並ぶもの (列ごとに分かれたまとまり．31(2):119 の表2) は，重なってもよい
+                if r.y0 < top - 2 or gap > 30 or r.x0 < tr.x0 - size * 2 or r.x1 > tr.x1 + size * 2:
+                    continue
+                if any(e[0] == "text" for e in o["elems"]) and text_dir(o["elems"]) != direction:
+                    continue
+                # 間にほかの図表 (図題のあるまとまり) があれば合わせない
+                if any(caps.get(id(x)) and x is not c and tr.y1 - 2 <= pymupdf.Rect(T(x["rect"])).y0 <= r.y0 + 2
+                       and min(r.x1, pymupdf.Rect(T(x["rect"])).x1) - max(r.x0, pymupdf.Rect(T(x["rect"])).x0) > 0
+                       for x in clusters):
+                    continue
+                got.append(o)
+                tr |= r
+                more = True
+        for o in got:
+            c["elems"] += o["elems"]
+            c["rect"] |= o["rect"]
+            clusters.remove(o)
+        if got:
+            REPORT.append(f"{cap['label']} の表に，すぐ下の図題の無いまとまり {len(got)} 個を合わせた (表の行の間が空いていた)．確かめる")
+
+
 def cut_body_lines(content, cap, body_lines, mid):
     """中身の上端・下端にかかる本文の行 (段の幅の半分より長いもの) を外す．
 
@@ -1171,6 +1220,7 @@ def main():
         clusters = [sub for c in float_regions(page, lines, lay, is_body_page) for sub in split_by_captions(c, lay)]
         caps = {id(c): caption_of(c, lay) for c in clusters}
         attach_side_figures(clusters, caps)
+        grow_tables(clusters, caps)
         body_now = [l for l in lines if is_body_page(l) and not l["footer"]]
         orphans = []      # キャプションの無いまとまり (前のページの図表の続きの候補)
         for c in clusters:

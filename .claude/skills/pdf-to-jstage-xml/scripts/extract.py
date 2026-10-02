@@ -319,7 +319,7 @@ def spans_to_md(spans, size, lay):
             # 行の中心より上にあれば上付き，下にあれば下付き
             mid = (s["bbox"][1] + s["bbox"][3]) / 2
             t = f"^{t.strip()}^" if mid < (top + bottom) / 2 else f"~{t.strip()}~"
-        elif lay["italic_font"] in s["font"] and t.strip():
+        elif any(f in s["font"] for f in as_list(lay["italic_font"])) and t.strip():
             lead = t[: len(t) - len(t.lstrip())]
             trail = t[len(t.rstrip()):]
             t = f"{lead}*{t.strip()}*{trail}"

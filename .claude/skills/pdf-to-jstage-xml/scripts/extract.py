@@ -361,6 +361,9 @@ JA_CHAR = re.compile(r"[぀-ヿ㐀-鿿]")
 
 def join(a, b):
     """行をつなぐ．和文は詰め，欧文は空白を入れ，行末のハイフンを判断する．"""
+    # 軟ハイフン (U+00AD) は行の途中なら消す (「Matsu­mu­ra」．34(1):1)．行末のものは下で分綴として扱う
+    a = re.sub("­(?!\\s*$)", "", a)
+    b = re.sub("­(?!\\s*$)", "", b)
     if not a:
         return b.lstrip()
     trailing_space = a != a.rstrip()
@@ -368,6 +371,11 @@ def join(a, b):
     b = b.lstrip()
     if not b:
         return a
+    if a.endswith(("­", "‑")):
+        # DTP の号の英文の論文は，行末の分綴を軟ハイフン (U+00AD) か U+2011 で組む (34(1):1・23)．
+        # 本来のハイフンは上付きの小さい「-」なので，これらは外して詰める
+        REPORT.append(f"分綴を外した: {a[-12:-1]} + {b[:10]}")
+        return a[:-1] + b
     if a.endswith("*") and b.startswith("*") and not a.endswith("**"):
         # 行をまたぐ斜体 (*Lolio-Cyno-* + *suretum*) は印を外してからつなぐ
         return join(a[:-1] + (" " if trailing_space else ""), b[1:])

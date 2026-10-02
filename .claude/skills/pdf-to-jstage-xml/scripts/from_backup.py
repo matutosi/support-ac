@@ -122,6 +122,10 @@ def build_meta(root, prof, source):
     kws = {"en": [], "ja": []}
     for g in am.findall("kwd-group"):
         kws.setdefault(g.get(XL) or lang, []).extend(clean(md(k)) for k in g.findall("kwd"))
+    # 控えの和文のキーワードは英語のキーワードの写しのことがある (31〜43 巻で和文のキーワードを持つ 77 本すべて．
+    # 紙面に和文のキーワードは無い)．かな・漢字が 1 つも無ければ空にする (「relevés」の é は和文の字ではない．35(2):67)
+    if kws.get("ja") and not any(re.search(r"[ぁ-ゖァ-ヺ一-鿿々]", k) for k in kws["ja"]):
+        kws["ja"] = []
     abstract = {"ja": None, "en": None}
     for a in am.findall("abstract") + am.findall("trans-abstract"):
         abstract[a.get(XL) or lang] = clean("\n".join(md(p) for p in a.findall("p")))

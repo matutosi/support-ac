@@ -101,6 +101,21 @@ def head_font(font, lay):
     return any(h in font for h in as_list(lay["heading_font"]))
 
 
+def cap_font(line, lay):
+    """図題・表題の書体か．
+
+    和文の論文でも，図表の題が英文 (「Fig. 1.」「Table 1.」が Times の太字) のことがある
+    (32〜35 巻の和文の論文の多く．31/107 など)．このとき行の書体は見出しの書体 (Gothic) にならないので，
+    行頭の字 (番号の札) の書体が英文の太字 (設定の heading_font_latin) かも見る．
+    本文の中の「Table 1 に示す」は太字でないので当たらない．
+    """
+    if head_font(line["font"], lay):
+        return True
+    first = next((s for s in line["spans"] if s["text"].strip()), None)
+    return bool(first) and (head_font(first["font"], lay)
+                            or any(h in first["font"] for h in as_list(lay.get("heading_font_latin", "Bold"))))
+
+
 def line_font(spans, lay):
     """行の書体名 (いちばん大きい span の書体)．
 
@@ -196,17 +211,22 @@ def auto_layout(doc, lay, refs_titles=()):
             lay["ref_size"] = last.most_common(1)[0][0]
             REPORT.append("引用文献の字の大きさを最終ページから決めた (文献の節の行が数えられなかった)．確かめる")
     # 柱: 2ページ目以降の本文の最上行より上．脚注: 本文の最下行より下
-    tops, bottoms = [], []
+    tops, bottoms, lefts, rights = [], [], [], []
     for p in pages:
-        ys = [(l["bbox"][1], l["bbox"][3]) for b in p.get_text("dict")["blocks"] for l in b.get("lines", [])
+        ys = [l["bbox"] for b in p.get_text("dict")["blocks"] for l in b.get("lines", [])
               if abs(max(s["size"] for s in l["spans"]) - lay["body_size"]) <= lay["size_tol"]
               and not re.fullmatch(r"\s*\d+\s*", "".join(s["text"] for s in l["spans"]))]
         if ys:
-            tops.append(min(y[0] for y in ys))
-            bottoms.append(max(y[1] for y in ys))
+            tops.append(min(y[1] for y in ys))
+            bottoms.append(max(y[3] for y in ys))
+            lefts.append(min(y[0] for y in ys))
+            rights.append(max(y[2] for y in ys))
     if tops:
         lay["header_y_max"] = min(tops) - 1
         lay["footer_y_min"] = max(bottoms) + 1
+        # 版面の左右 (図表の画像や線がはみ出していても，見えるのは版面の中だけ．クリップされた画像の箱は版面より大きい)
+        lay["text_x0"] = statistics.median(lefts)
+        lay["text_x1"] = statistics.median(rights)
     REPORT.append("組み方 (自動): " + ", ".join(f"{k}={lay[k]:.1f}" if isinstance(lay[k], float) else f"{k}={lay[k]}"
                                            for k in ("body_size", "heading1_size", "ref_size",
                                                      "header_y_max", "footer_y_min")))
@@ -390,45 +410,61 @@ def column_modes(lines, mid, hanging=False):
 def float_regions(page, lines, lay, is_body):
     """本文以外の要素 (画像・罫線・本文でない行) をまとまりごとに集める．"""
     W = page.rect.width
+    # 版面 (少し余裕を持たせる)．はみ出した画像や線 (クリップで隠れた部分．35(1):21 の図5，31(2):165 の図2) は版面で切る
+    live = pymupdf.Rect(lay.get("text_x0", 0) - 8, lay["header_y_max"] - 10,
+                        lay.get("text_x1", W) + 8, lay["footer_y_min"] + 10) & page.rect
     elems = []
     for img in page.get_image_info():
-        elems.append(("img", pymupdf.Rect(img["bbox"])))
+        r = pymupdf.Rect(img["bbox"]) & live
+        if not r.is_empty:
+            elems.append(("img", r))
     for d in page.get_drawings():
         r = d["rect"]
         if r.y1 <= lay["header_y_max"] + 5 and r.width > W * 0.5:
             continue  # 柱の下の罫線
-        elems.append(("draw", pymupdf.Rect(r)))
+        r = pymupdf.Rect(r)
+        # 表の罫線は高さ (縦の罫線は幅) が 0 の箱で，PyMuPDF では空の箱として和 (|) にも重なりにも数えられない．
+        # 表題と表の中身の間が空いた表 (32(1):1 の Table 2 など) が表題だけの枠になるので，罫線に 0.5pt の厚みを持たせる
+        if r.height <= 0:
+            r.y0, r.y1 = r.y0 - 0.25, r.y0 + 0.25
+        if r.width <= 0:
+            r.x0, r.x1 = r.x0 - 0.25, r.x0 + 0.25
+        r &= live
+        if r.is_empty:
+            continue
+        elems.append(("draw", r))
     for l in lines:
         if not is_body(l) and not l["footer"]:
             elems.append(("text", pymupdf.Rect(l["x0"], l["y0"], l["x1"], l["y1"]), l))
-    # 近いもの同士をまとめる
-    clusters = []
-    for e in elems:
-        r = pymupdf.Rect(e[1])
-        hit = None
-        for c in clusters:
-            if (c["rect"] + (-12, -12, 12, 12)).intersects(r):
-                hit = c
-                break
-        if hit:
-            hit["rect"] |= r
-            hit["elems"].append(e)
-        else:
-            clusters.append({"rect": r, "elems": [e]})
-    # 連鎖でつながるものを繰り返しまとめる
+    # 近いもの同士 (12pt 以内) をまとめる．まとまりの外接矩形どうしが近ければ，連鎖して1つにする．
+    # 線の多い図 (31(2):107 の5ページは 3 万本) でも速いよう，矩形は数の組で持ち，x0 の順に掃いて
+    # 近いものを合わせることを，合わせるものが無くなるまで繰り返す (結果は 1 つずつ合わせるのと同じ)
+    G = 12
+    boxes = [[e[1].x0, e[1].y0, e[1].x1, e[1].y1, [k]] for k, e in enumerate(elems)]
     merged = True
     while merged:
         merged = False
-        for i in range(len(clusters)):
-            for j in range(i + 1, len(clusters)):
-                if (clusters[i]["rect"] + (-12, -12, 12, 12)).intersects(clusters[j]["rect"]):
-                    clusters[i]["rect"] |= clusters[j]["rect"]
-                    clusters[i]["elems"] += clusters[j]["elems"]
-                    del clusters[j]
-                    merged = True
+        boxes.sort(key=lambda b: b[0])
+        out = []
+        for b in boxes:
+            # 直前までのまとまりのうち，x の範囲が届くものと比べる (届かないものは以後も届かない)
+            hit = None
+            for c in reversed(out):
+                if c[0] - G < b[2] and b[0] < c[2] + G and c[1] - G < b[3] and b[1] < c[3] + G:
+                    hit = c
                     break
-            if merged:
-                break
+            if hit is None:
+                out.append(b)
+            else:
+                hit[0], hit[1] = min(hit[0], b[0]), min(hit[1], b[1])
+                hit[2], hit[3] = max(hit[2], b[2]), max(hit[3], b[3])
+                hit[4] += b[4]
+                merged = True
+        boxes = out
+    clusters = []
+    for b in sorted(boxes, key=lambda b: min(b[4])):     # 元の並び (最初の要素の順) を保つ
+        ks = sorted(b[4])
+        clusters.append({"rect": pymupdf.Rect(b[0], b[1], b[2], b[3]), "elems": [elems[k] for k in ks]})
     return clusters
 
 
@@ -438,10 +474,14 @@ def cap_match(text, lay):
     付表 (「付表1」「Appendix 1」．引用文献の後ろの組成表など) は表として扱い，Table 1 と番号が重なるので
     枠を TA1，画像を appendix1.png にする (extract_scan.py と同じ)．番号の無い「付表」(31(2):179) は 1 とみる．
     """
+    text = text.lstrip()   # 行頭に全角の空白の span があることがある (33(1):1 の Table 2〜4)
     m = re.match(lay["caption_pattern"], text)
     if m:
-        kind = "fig" if m.group(1) in ("図", "Fig.") else "table"
-        return kind, int(m.group(2)), False, None
+        kind = "fig" if m.group(1).startswith(("図", "Fig")) else "table"   # 「Fig 6.」(34(1):39) も図
+        # 呼び名は紙面の札に合わせる (和文の論文でも図表の題が英文なら「Fig. 1」「Table 1」)
+        word = m.group(1)
+        label = f"{word} {int(m.group(2))}" if re.match(r"[A-Za-z]", word) else f"{word}{int(m.group(2))}"
+        return kind, int(m.group(2)), False, label
     if lay.get("appendix_pattern"):
         m = re.match(lay["appendix_pattern"], text)
         if m:
@@ -455,7 +495,7 @@ def mark_captions(lines, lay):
     2025 年の号はキャプションが本文と同じ大きさなので，大きさでは本文と分けられない．
     続きの行は，すぐ下にあり，キャプションの行頭より右から始まる (ぶら下げ字下げ) もの．
     """
-    for cap in [l for l in lines if head_font(l["font"], lay) and cap_match(l["text"], lay)]:
+    for cap in [l for l in lines if cap_font(l, lay) and cap_match(l["text"], lay)]:
         cap["cap"] = True
         cap["appx"] = cap_match(cap["text"], lay)[2]
         last = cap
@@ -470,7 +510,7 @@ def mark_captions(lines, lay):
 
 
 def caption_of(cluster, lay):
-    caps = [e for e in cluster["elems"] if e[0] == "text" and head_font(e[2]["font"], lay)
+    caps = [e for e in cluster["elems"] if e[0] == "text" and cap_font(e[2], lay)
             and cap_match(e[2]["text"], lay)]
     if not caps:
         return None
@@ -478,27 +518,87 @@ def caption_of(cluster, lay):
     # キャプションの続きの行 (同じ大きさ・すぐ下・左端がそろう)
     text = cap["md"]
     last = cap
+    # 図題の範囲は全行の和 (最後の行が短いと，最初の行と最後の行の角だけでは途中の長い行がはみ出し，図の枠に写り込む)
+    rect = pymupdf.Rect(cap["x0"], cap["y0"], cap["x1"], cap["y1"])
+    texts = [e[2] for e in cluster["elems"] if e[0] == "text"]
+
+    def table_row(l):
+        # 表の見出しの行の最初のセル (「調査地」など)．同じ高さの右に，離れた別の字がある (31(2):119 の表2)
+        return any(o is not l and abs(o["y0"] - l["y0"]) < cap["size"] * 0.5
+                   and o["x0"] > l["x1"] + cap["size"] * 1.5 and o["x1"] < rect.x1 - cap["size"] for o in texts)
     for e in sorted((e for e in cluster["elems"] if e[0] == "text"), key=lambda e: e[2]["y0"]):
         l = e[2]
         if l is cap or l["y0"] <= last["y0"]:
             continue
         if near(l["size"], cap["size"], 0.2) and l["y0"] - last["y1"] < cap["size"] * 0.8 \
-                and cap["x0"] - 2 <= l["x0"] <= cap["x0"] + cap["size"] * 1.5:
+                and cap["x0"] - 2 <= l["x0"] <= cap["x0"] + cap["size"] * 1.5 and not table_row(l):
             text = join(text, l["md"])
             last = l
+            rect |= pymupdf.Rect(l["x0"], l["y0"], l["x1"], l["y1"])
         else:
             break
     kind, num, appx, label = cap_match(cap["text"], lay)
     return {"kind": kind, "num": num, "appx": appx, "label": label, "line": cap, "text": text.strip(),
-            "cap_rect": pymupdf.Rect(cap["x0"], cap["y0"], last["x1"], last["y1"])}
+            "cap_rect": rect}
+
+
+def split_by_captions(cluster, lay):
+    """図題が 2 つ以上入ったまとまりを，図題ごとに分ける．
+
+    上下に接した図 (31(2):107 の Fig. 4 と Fig. 5) は 1 つのまとまりになり，上の図題の図だけが作られて
+    下の図が消える．図は図題の上 (または横)，表は表題の下にあるとみて，要素を近い図題に配る．
+    """
+    texts = [e for e in cluster["elems"] if e[0] == "text"]
+    capl, keys = [], set()
+    for e in sorted(texts, key=lambda e: e[2]["y0"]):
+        m = cap_font(e[2], lay) and cap_match(e[2]["text"], lay)
+        if m and m[:3] not in keys:
+            keys.add(m[:3])
+            capl.append(e)
+    if len(capl) < 2:
+        return [cluster]
+    others = [e for e in texts if e not in capl]
+    infos = [caption_of({"elems": [e] + others}, lay) for e in capl]
+    groups = [[] for _ in capl]
+    for el in cluster["elems"]:
+        r = el[1]
+        own = next((i for i, (e, info) in enumerate(zip(capl, infos))
+                    if el is e or el[0] == "text" and info["cap_rect"].contains(r)), None)
+        if own is None:
+            cy = (r.y0 + r.y1) / 2
+            best = None
+            for i, info in enumerate(infos):
+                cr = info["cap_rect"]
+                dx = max(cr.x0 - r.x1, r.x0 - cr.x1, 0)
+                if info["kind"] == "fig" and cr.y1 >= cy - 2:
+                    d = max(0, cr.y0 - cy) + dx
+                elif info["kind"] == "table" and cr.y0 <= cy + 2:
+                    d = max(0, cy - cr.y1) + dx
+                else:
+                    d = 1e6 + abs(cy - (cr.y0 + cr.y1) / 2) + dx
+                if best is None or d < best[0]:
+                    best = (d, i)
+            own = best[1]
+        groups[own].append(el)
+    out = []
+    for g in groups:
+        if g:
+            rect = pymupdf.Rect()
+            for el in g:
+                rect |= el[1]
+            out.append({"rect": rect, "elems": g})
+    REPORT.append("図題が " + "・".join(info["label"] or "" for info in infos) + " の入ったまとまりを図題ごとに分けた．確かめる")
+    return out
 
 
 def content_rect(c, cap):
     """まとまりから図題 (キャプションとその続きの行) を除いた範囲．"""
     r = pymupdf.Rect()
     for e in c["elems"]:
-        if e[0] == "text" and (e[2].get("cap") or (cap and cap["cap_rect"].contains(e[1]))):
+        if e[0] == "text" and e[2].get("cap"):
             continue
+        if cap and e[0] != "img" and cap["cap_rect"].contains(e[1]):
+            continue    # 図題の行と，図題の中に線で描かれた記号 (33(1):33 の Fig. 3 の「▲」)
         r |= e[1]
     return r if not r.is_empty else c["rect"]
 
@@ -509,11 +609,164 @@ def trim_caption(content, cap_rects, page, margin=3):
     for cr in cap_rects:
         if cr.x1 < clip.x0 or cr.x0 > clip.x1:
             continue
-        if cr.y0 >= content.y1 - 2:          # 図題が下
+        # 図の白い下地や線が図題の下まで伸びていると，図題が中身と重なる (35(1):21 の図3)．
+        # 中身の下半分にかかる図題は下，上半分にかかる図題は上とみて，その手前で切る
+        # (横組みの図題で，中身と横に重なるときだけ．縦組みの表題 (35(1):67 の表3) は横の端にかかるだけなので除く)
+        cy = (content.y0 + content.y1) / 2
+        inside = cr.width > cr.height and min(cr.x1, content.x1) - max(cr.x0, content.x0) > cr.width * 0.5
+        if cr.y0 >= content.y1 - 2 or inside and cr.y0 > cy:          # 図題が下
             clip.y1 = min(clip.y1, cr.y0 - 0.5)
-        elif cr.y1 <= content.y0 + 2:        # 図題が上
+        elif cr.y1 <= content.y0 + 2 or inside and cr.y1 < cy:        # 図題が上
             clip.y0 = max(clip.y0, cr.y1 + 0.5)
     return clip
+
+
+def has_content(c, cap):
+    """まとまりに図題のほかの中身があるか (図題の脇の小さい線や記号 (33(1):1 の Fig. 1) は中身とみない)．"""
+    r = pymupdf.Rect()
+    for e in c["elems"]:
+        if not (e[0] == "text" and e[2].get("cap")) and not (e[0] != "img" and cap["cap_rect"].contains(e[1])):
+            r |= e[1]
+    return not r.is_empty and r.get_area() > max(1500, cap["cap_rect"].get_area())
+
+
+def grow_figure(clusters, caps, c, cap):
+    """図の中身のすぐ上 (または横) に，間の空いた図題の無いまとまりがあれば合わせる．
+
+    図の凡例だけが図題とつながり，図の本体が 12pt 以上離れて別のまとまりになることがある
+    (33(1):1 の Fig. 1，34(1):39 の Fig. 2)．図題より下のものは合わせない (本文や次の図)．
+    """
+    fig = content_rect(c, cap)
+    cr = cap["cap_rect"]
+    got = []
+    more = True
+    while more:
+        more = False
+        for o in clusters:
+            if o is c or o in got or caps.get(id(o)) or o["rect"].get_area() < 2000:
+                continue
+            r = o["rect"]
+            if r.y1 > cr.y1 + 5:
+                continue
+            gap = max(r.y0 - fig.y1, fig.y0 - r.y1)
+            if gap > 30 or min(r.x1, fig.x1) - max(r.x0, fig.x0) <= 0:
+                continue
+            # ほかの図表 (表題のあるまとまり) のほうに近いものは，そちらの一部 (表の脚注など．31(2):107 の表1)
+            if any(caps.get(id(x)) and x is not c and min(r.x1, x["rect"].x1) - max(r.x0, x["rect"].x0) > 0
+                   and max(r.y0 - x["rect"].y1, x["rect"].y0 - r.y1) < gap for x in clusters):
+                continue
+            if True:
+                got.append(o)
+                fig |= r
+                more = True
+    for o in got:
+        c["elems"] += o["elems"]
+        c["rect"] |= o["rect"]
+        clusters.remove(o)
+    if got:
+        REPORT.append(f"{cap['label']} の図に，すぐ上の図題の無いまとまりを合わせた {tuple(round(v) for v in fig)}．確かめる")
+
+
+def attach_side_figures(clusters, caps):
+    """図題だけのまとまりに，横 (または上下のすぐ近く) にある図題の無いまとまりを合わせる．
+
+    図題を図の横に置く組み方 (31(2):119 の図5，31(2):165 の図1) では，図と図題の間が空いていて
+    別のまとまりになり，図題の枠は図題だけ，図は図題の無いまとまり (前の図の続き扱い) になる．
+    """
+    for c in list(clusters):
+        cap = caps.get(id(c))
+        if not cap:
+            continue
+        if has_content(c, cap):
+            if cap["kind"] == "fig":
+                grow_figure(clusters, caps, c, cap)
+            continue
+        cr = cap["cap_rect"]
+        best, best_d = None, None
+        for o in clusters:
+            if o is c or caps.get(id(o)) or o["rect"].get_area() < 2000:
+                continue
+            r = o["rect"]
+            cc = c["rect"]   # 図題と，図題の脇の凡例など (34(1):39 の Fig. 2)
+            dy = max(r.y0 - cc.y1, cc.y0 - r.y1, 0)      # 縦の隔たり (重なれば 0)
+            dx = max(r.x0 - cc.x1, cc.x0 - r.x1, 0)
+            if dy > 30 or dx > 60:
+                continue
+            d = dx + dy
+            if best is None or d < best_d:
+                best, best_d = o, d
+        if best is None:
+            continue
+        # 合わせた図のすぐ上下に続く図題の無いまとまり (縦に並んだ小図．31(2):119 の図5) も合わせる
+        got = [best]
+        fig = pymupdf.Rect(best["rect"])
+        more = True
+        while more:
+            more = False
+            for o in clusters:
+                if o is c or o in got or caps.get(id(o)) or o["rect"].get_area() < 2000:
+                    continue
+                r = o["rect"]
+                if max(r.y0 - fig.y1, fig.y0 - r.y1) <= 30 and min(r.x1, fig.x1) - max(r.x0, fig.x0) > 0:
+                    got.append(o)
+                    fig |= r
+                    more = True
+        cap["side"] = True    # 図題が図の横にある (段で切らない)
+        for o in got:
+            c["elems"] += o["elems"]
+            c["rect"] |= o["rect"]
+            clusters.remove(o)
+        REPORT.append(f"図題 {cap['label']} の横 (近く) の図を合わせた {tuple(round(v) for v in fig)}．確かめる")
+
+
+def cut_body_lines(content, cap, body_lines, mid):
+    """中身の上端・下端にかかる本文の行 (段の幅の半分より長いもの) を外す．
+
+    図の白い下地が本文の上まで伸びていると，本文の行が図の画像に写り込む (31(2):165 の図2)．
+    """
+    r = pymupdf.Rect(content)
+    cy = (r.y0 + r.y1) / 2
+    for l in body_lines:
+        if l["x1"] - l["x0"] < mid * 0.4 or l["y1"] <= r.y0 or l["y0"] >= r.y1:
+            continue
+        if min(l["x1"], r.x1) - max(l["x0"], r.x0) < (l["x1"] - l["x0"]) * 0.8:   # 行のほとんどが中身の幅に入る
+            continue
+        if (l["y0"] + l["y1"]) / 2 < cy:
+            r.y0 = max(r.y0, l["y1"] + 3.5)
+        else:
+            r.y1 = min(r.y1, l["y0"] - 3.5)
+    if r.is_empty or r.height < content.height * 0.3:
+        return content        # 中身の大半が消えるなら切らない (本文の大きさの字を使った図など)
+    if r != content:
+        REPORT.append(f"{cap['label']} の枠から本文の行を外した {tuple(round(v) for v in content)} → {tuple(round(v) for v in r)}")
+    return r
+
+
+def clamp_to_column(content, cap, body_lines, mid):
+    """図題が片方の段にだけあり，中身がもう一方の段の本文の行に重なるときは，図題の段に切る．
+
+    クリップで隠れた画像の箱や下地は，見えている図より広いことがある (35(1):21 の図5，31(2):165 の図2)．
+    """
+    cr = cap["cap_rect"]
+    if cap.get("side"):
+        return cut_body_lines(content, cap, body_lines, mid)
+    if cr.x1 <= mid + 10:
+        col, other = (None, mid - 4), lambda l: l["x0"] >= mid - 10
+    elif cr.x0 >= mid - 10:
+        col, other = (mid + 4, None), lambda l: l["x0"] < mid - 10
+    else:
+        return cut_body_lines(content, cap, body_lines, mid)
+    hit = [l for l in body_lines if other(l) and l["y1"] > content.y0 and l["y0"] < content.y1
+           and l["x1"] > content.x0 and l["x0"] < content.x1]
+    if len(hit) < 2:
+        return cut_body_lines(content, cap, body_lines, mid)
+    r = pymupdf.Rect(content)
+    if col[1] is not None:
+        r.x1 = min(r.x1, col[1])
+    else:
+        r.x0 = max(r.x0, col[0])
+    REPORT.append(f"{cap['label']} の枠を図題の段に切った (もう一方の段の本文に重なっていた)")
+    return cut_body_lines(r, cap, body_lines, mid)
 
 
 # ---------------------------------------------------------------- 本体
@@ -676,10 +929,13 @@ def main():
             if close_at and (column_of(l, mid), l["y0"]) >= close_at and not is_h1(l):
                 return False
             return is_body(l) or refs_here and near(l["size"], lay["ref_size"], tol)
-        clusters = float_regions(page, lines, lay, is_body_page)
+        clusters = [sub for c in float_regions(page, lines, lay, is_body_page) for sub in split_by_captions(c, lay)]
+        caps = {id(c): caption_of(c, lay) for c in clusters}
+        attach_side_figures(clusters, caps)
+        body_now = [l for l in lines if is_body_page(l) and not l["footer"]]
         orphans = []      # キャプションの無いまとまり (前のページの図表の続きの候補)
         for c in clusters:
-            cap = caption_of(c, lay)
+            cap = caps[id(c)]
             txt = [e[2] for e in c["elems"] if e[0] == "text"]
             if txt:
                 floats_txt.append(f"===== page {pno} {'' if not cap else cap['kind'] + str(cap['num'])}")
@@ -694,7 +950,7 @@ def main():
                 continue
             kind, num, appx = cap["kind"], cap["num"], cap["appx"]
             fig_count[kind] += 1
-            content = content_rect(c, cap)
+            content = clamp_to_column(content_rect(c, cap), cap, body_now, mid)
             clip = trim_caption(content, [cap["cap_rect"]], page)
             stem = "appendix" if appx else kind
             sub, name = ("figs" if kind == "fig" else "tables"), f"{stem}{num}.png"
@@ -709,9 +965,9 @@ def main():
             if appx:
                 appendix_floats.append([f":::table TA{num} {cap['label']}", f"@@CAP {key}@@", "@image", ":::"])
             elif kind == "fig":
-                pending_floats.append([f":::fig F{num} 図{num} {name}", f"@@CAP {key}@@", ":::"])
+                pending_floats.append([f":::fig F{num} {cap['label']} {name}", f"@@CAP {key}@@", ":::"])
             else:
-                pending_floats.append([f":::table T{num} 表{num}", f"@@CAP {key}@@",
+                pending_floats.append([f":::table T{num} {cap['label']}", f"@@CAP {key}@@",
                                        # 表は画像のまま載せるのが既定 (2026-09-29 ユーザ指示)．ただし DTP の号で組版された表が
                                        # 容易に組めるときだけは組む (table_draft.py で下書きし，@image の行を消す)
                                        "@image",

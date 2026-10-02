@@ -316,11 +316,19 @@ def main():
     if reg and ocr and not (0.7 <= len(ocr) / len(reg) <= 1.3):
         rep.append(f"控えの .txt から組んだ文献は {len(ocr)} 件で登録 {len(reg)} 件とかけ離れる (行の並びが崩れている) ので使わない")
         ocr = []
+    far = None
     if not ocr:
         draft = section_lines(md, refs_names, all_names)
-        if draft:
+        if draft and reg and not (0.7 <= len(draft) / len(reg) <= 1.3):
+            # 下書きの文献も件数がかけ離れていれば使わない (文献の後ろの付表を拾った 35(1):1 の 647 件 / 登録 26 件など)．
+            # 文献の節は書き換えず，作成役に紙面から組み直させる
+            far = len(draft)
+        elif draft:
             ocr, src = draft, "下書き (手順 1)"
-    if ocr:
+    if far is not None:
+        rep.insert(1, f"引用文献: **要確認**．下書きの文献は {far} 件で登録 {len(reg)} 件とかけ離れる (付表などを拾った疑い)．"
+                      "文献の節は書き換えていない．紙面の文献一覧と refs_backup.md を手本に組み直す")
+    elif ocr:
         pr = pair(ocr, reg)
         fixed = []
         n_fix = 0

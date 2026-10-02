@@ -150,7 +150,15 @@ KNOWN_JA = {}
 
 
 def load_known_ja(work):
-    """jstage/work/<巻>/<開始ページ>/meta.yaml の著者の和名 [姓, 名] を集める．"""
+    """jstage/work/<巻>/<開始ページ>/meta.yaml の著者の和名 [姓, 名] を集める．
+    作業ディレクトリの無い号 (13〜20・22・23 巻) の著者も入るよう，作業の根の _backup・_bundle の XML の
+    著者欄も集める (2026-10-03．fix_ja_names.py と同じ辞書)．"""
+    try:
+        from fix_ja_names import load_known
+        for k, v in load_known(Path(work).resolve().parent.parent).items():
+            KNOWN_JA.setdefault(k, v)
+    except Exception:
+        pass
     for p in Path(work).resolve().parent.parent.glob("*/*/meta.yaml"):
         try:
             m = yaml.safe_load(p.read_text(encoding="utf-8")) or {}

@@ -1390,6 +1390,12 @@ def compare_pairs(web, pdf, pair, structured, norm):
             # 登録版は筆頭著者だけ・発行地なし・和文の書誌の足し書きなどで，PDF にだけある語は常に出る．
             # 違いとして数えるのは，登録版にだけある語 (綴りや数字の食い違い) だけにする
             miss = words(w) - words(p)
+            # 登録版は著者の名を略さず書く (「Komiyama Akira .」) が，紙面は頭文字 (「A.」) のことが多い．
+            # 登録版の著者の欄 (最初の「 . 」の前) にある欧字の語で，頭の字が紙面の頭文字と同じものは違いにしない (24(1))
+            inits = {c.casefold() for c in re.findall(r"(?<![A-Za-z])([A-Z])\.", unicodedata.normalize("NFKC", p))}
+            names = set(ref_words(w.split(" . ", 1)[0])) if " . " in w else set()
+            for x in [x for x in miss if x in names and x.isascii() and x.isalpha() and x[0] in inits]:
+                del miss[x]
             if not miss:
                 form += 1
                 continue

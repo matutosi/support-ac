@@ -534,29 +534,47 @@ def caption_of(cluster, lay):
             and cap_match(e[2]["text"], lay)]
     if not caps:
         return None
-    cap = min(caps, key=lambda e: e[2]["y0"])[2]
-    # キャプションの続きの行 (同じ大きさ・すぐ下・左端がそろう)
+    # 寝た表題 (縦組みの表．35(2):109 の表1) は，起こした座標で行のつながりを見る
+    cdir = min(caps, key=lambda e: e[2]["y0"])[2].get("dir", (1, 0))
+    T = turn_of(cdir)[0]
+
+    def box(l):
+        return pymupdf.Rect(T((l["x0"], l["y0"], l["x1"], l["y1"])))
+    cap = min((e[2] for e in caps if e[2].get("dir", (1, 0)) == cdir), key=lambda l: box(l).y0)
+    # キャプションの続きの行 (同じ向き・同じ大きさ・すぐ下・左端がそろう)
     text = cap["md"]
-    last = cap
+    cb = box(cap)
+    last = cb
     # 図題の範囲は全行の和 (最後の行が短いと，最初の行と最後の行の角だけでは途中の長い行がはみ出し，図の枠に写り込む)
     rect = pymupdf.Rect(cap["x0"], cap["y0"], cap["x1"], cap["y1"])
-    texts = [e[2] for e in cluster["elems"] if e[0] == "text"]
+    trect = pymupdf.Rect(cb)
+    texts = [e[2] for e in cluster["elems"] if e[0] == "text" and e[2].get("dir", (1, 0)) == cdir]
 
     def table_row(l):
         # 表の見出しの行の最初のセル (「調査地」など)．同じ高さの右に，離れた別の字がある (31(2):119 の表2)
-        return any(o is not l and abs(o["y0"] - l["y0"]) < cap["size"] * 0.5
-                   and o["x0"] > l["x1"] + cap["size"] * 1.5 and o["x1"] < rect.x1 - cap["size"] for o in texts)
-    for e in sorted((e for e in cluster["elems"] if e[0] == "text"), key=lambda e: e[2]["y0"]):
-        l = e[2]
-        if l is cap or l["y0"] <= last["y0"]:
+        b = box(l)
+        return any(o is not l and abs(box(o).y0 - b.y0) < cap["size"] * 0.5
+                   and box(o).x0 > b.x1 + cap["size"] * 1.5 and box(o).x1 < trect.x1 - cap["size"] for o in texts)
+    prev = cap
+    for l in sorted(texts, key=lambda l: box(l).y0):
+        b = box(l)
+        if l is cap or b.y0 <= last.y0:
             continue
-        if near(l["size"], cap["size"], 0.2) and l["y0"] - last["y1"] < cap["size"] * 0.8 \
-                and cap["x0"] - 2 <= l["x0"] <= cap["x0"] + cap["size"] * 1.5 and not table_row(l):
-            text = join(text, l["md"])
-            last = l
-            rect |= pymupdf.Rect(l["x0"], l["y0"], l["x1"], l["y1"])
-        else:
+        if not (near(l["size"], cap["size"], 0.2) and b.y0 - last.y1 < cap["size"] * 0.8 and not table_row(l)):
             break
+        # 左端: 横組みでぶら下げ字下げ (続きが右か同じ) なら続き．
+        # 寝た表題と，1 行目だけ字下げした表題 (続きが 1 字ほど左．35(2):109 の表1・表2) は，前の行が文の途中で
+        # 終わるときだけ続きとみる．文が終わった後の行は，表題の続きのことも (34(1):39 の表1)，
+        # 表題と表の間の注 (31(2):179 の付表・32(1):17 の表3・33(1):1 の表1) や表の小見出し (35(1):21 の表1) のこともあり，
+        # 形では分けられないので，従来どおり split_table_foot が「確かめる」と出す
+        hanging = cdir == (1, 0) and cb.x0 - 2 <= b.x0 <= cb.x0 + cap["size"] * 1.5
+        flowing = cb.x0 - cap["size"] * 1.2 <= b.x0 <= cb.x0 + cap["size"] * 1.5 \
+            and not re.search(r"[。．.]\s*$", prev["text"])
+        if not (hanging or flowing):
+            break
+        text = join(text, l["md"])
+        last, prev = b, l
+        rect |= pymupdf.Rect(l["x0"], l["y0"], l["x1"], l["y1"])
     kind, num, appx, label = cap_match(cap["text"], lay)
     return {"kind": kind, "num": num, "appx": appx, "label": label, "line": cap, "text": text.strip(),
             "cap_rect": rect}
@@ -623,9 +641,19 @@ def content_rect(c, cap):
     return r if not r.is_empty else c["rect"]
 
 
-def trim_caption(content, cap_rects, page, margin=3):
-    """余白を足したうえで，図題の手前で切る (図題が画像に写り込まないように)．"""
-    clip = (content + (-margin, -margin, margin, margin)) & page.rect
+def trim_caption(content, cap_rects, page, margin=3, direction=(1, 0)):
+    """余白を足したうえで，図題の手前で切る (図題が画像に写り込まないように)．
+
+    寝た図題 (縦組みの表．35(2):109 の表1．表の下地の矩形が表題まで覆う) は，起こした座標で同じことをする．
+    """
+    clip = content + (-margin, -margin, margin, margin)
+    if page is not None:      # 起こした座標で呼ぶとき (下) は，ページで切るのを戻した後にする
+        clip &= page.rect
+    if direction != (1, 0):
+        T, back = turn_of(direction)[0], unturn_of(direction)
+        turned = trim_caption(pymupdf.Rect(T(content)), [pymupdf.Rect(T(cr)) for cr in cap_rects],
+                              None, margin=margin)
+        return pymupdf.Rect(back(turned)) & page.rect
     for cr in cap_rects:
         if cr.x1 < clip.x0 or cr.x0 > clip.x1:
             continue
@@ -697,7 +725,10 @@ def attach_side_figures(clusters, caps):
         cap = caps.get(id(c))
         if not cap:
             continue
-        if has_content(c, cap):
+        # 寝た図題は，横組みの前提 (上下・左右) で横の図を寄せると図の一部だけになる (34(1):23 の Fig. 2 は
+        # ページ全体の寝た図で，右の Belt 8〜10 だけを寄せ，左の Belt 6・7 を落とした) ので，寄せない
+        # (図題の無いまとまりは，ページの 4 分の 1 より大きければ「続き」として画像になる)
+        if has_content(c, cap) or cap["line"].get("dir", (1, 0)) != (1, 0):
             if cap["kind"] == "fig":
                 grow_figure(clusters, caps, c, cap)
             continue
@@ -864,6 +895,17 @@ def turn_of(direction):
     if direction == (-1, 0):
         return (lambda r: (-r[2], -r[3], -r[0], -r[1])), "y0", (lambda v: -v)
     return (lambda r: tuple(r)), "y1", (lambda v: v)
+
+
+def unturn_of(direction):
+    """turn_of の矩形の変換の逆 (起こした座標の矩形を実際の座標に戻す)．"""
+    if direction == (0, -1):
+        return lambda r: (r[1], -r[2], r[3], -r[0])
+    if direction == (0, 1):
+        return lambda r: (-r[3], r[0], -r[1], r[2])
+    if direction == (-1, 0):
+        return lambda r: (-r[2], -r[3], -r[0], -r[1])
+    return lambda r: tuple(r)
 
 
 def turn_line(l, T):
@@ -1162,7 +1204,7 @@ def main():
         content = body_rect or content_rect(c, cap)
         sub = "figs" if prev["kind"] == "fig" else "tables"
         name = f"{prev['stem']}_{prev['parts']}.png"
-        clip = trim_caption(content, cap_rects, page)
+        clip = trim_caption(content, cap_rects, page, direction=cap["line"].get("dir", (1, 0)) if cap else (1, 0))
         if cut_y is not None:
             apply_cut(clip, cut_y)
             feet[prev["key"]] = foot     # ページをまたぐ表は，最後のページの脚注を書く
@@ -1246,7 +1288,7 @@ def main():
             body_rect, foot, cut_y = split_table_foot(c, cap, key, lay, state=foot_state[key]) \
                 if kind == "table" else (None, None, None)
             content = clamp_to_column(body_rect or content_rect(c, cap), cap, body_now, mid)
-            clip = trim_caption(content, [cap["cap_rect"]], page)
+            clip = trim_caption(content, [cap["cap_rect"]], page, direction=cap["line"].get("dir", (1, 0)))
             if cut_y is not None:
                 apply_cut(clip, cut_y)
                 feet[key] = foot

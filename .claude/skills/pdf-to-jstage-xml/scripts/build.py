@@ -902,7 +902,7 @@ def link_floats(text, floats):
         kind = m.group(1)
         out = one(kind, m.group(3), m.group(1) + m.group(2) + m.group(3)) + (m.group(4) or "")
         rest, prev = m.group(5), int(m.group(3))
-        for mm in re.finditer(r"(\s*(?:[，,、]|and|&|＆|[-–−~〜～])\s*)(\d+)(" + PANEL + ")", rest):
+        for mm in re.finditer(r"(\s*(?:[，,、]|and|および|及び|&|＆|[-–−~〜～])\s*)(\d+)(" + PANEL + ")", rest):
             # 「図6-1」「図6-2」「Fig. 4-2」は図の枝番で，範囲ではない (22(1):25・21(2):89)．範囲 (Table 1-4) なら
             # 後ろの番号のほうが大きい．枝番から後ろはそのままの文字で残す
             if re.fullmatch(r"\s*[-–−]\s*", mm.group(1)) and int(mm.group(2)) <= prev:
@@ -918,7 +918,8 @@ def link_floats(text, floats):
                   # 「Table 1-4」「図1〜3」のように範囲で引くこともある (20(2):119)．
                   # 終わりの番号もリンクしないと，途中の図表が参照なしになる
                   # 文末の「Figs. 2 and 3.」の 3 もリンクする．除くのは小数 (「2.5」) だけ (35(1):49)
-                  r"((?:\s*(?:[，,、]|and|&|＆|[-–−~〜～])\s*\d+" + PANEL + r"(?![\dA-Za-z]|\.\d))*)", rep, text)
+                  # 和文の「付表1 および 2」の 2 もリンクする (36(2):43)
+                  r"((?:\s*(?:[，,、]|and|および|及び|&|＆|[-–−~〜～])\s*\d+" + PANEL + r"(?![\dA-Za-z]|\.\d))*)", rep, text)
     # 番号の無い呼び名 (「付表」だけの枠) は，本文の「（付表）」「付表に示した」をその呼び名で引く
     # (22(1):25・22(2):113)．番号が続くもの (付表1) は上で扱う
     bare = {}

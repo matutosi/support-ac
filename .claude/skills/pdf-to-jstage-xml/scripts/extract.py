@@ -273,6 +273,41 @@ def page_lines(page, lay):
     return merge_fragments(flat, lay, page.rect.width / 2) + [l for l in out if l["dir"] != (1, 0)]
 
 
+def page_layout(page, lay, width0):
+    """柱の無い図表のページ (折り込みの表．32(1):17 の表4) では，そのページの柱・脚注の範囲と版面を改めた lay を返す．
+
+    柱の範囲 (header_y_max より上) に，図表の題の書式 (cap_font・caption_pattern) に合う横組みの行があり，
+    そのすぐ下 (字の大きさの 2 倍以内) に行か線が続くとき，そのページは柱の無い図表のページとみる．
+    柱そのもの (誌名・題名・ノンブル) は題の書式に合わないので拾わない．
+    このページでは柱の範囲を題の上端の手前までに縮め，脚注の範囲は無くし (表の脚注がページの下端まで来る)，
+    ページの幅がほかのページと違えば (横長の折り込み) 版面の右端もそのぶん動かす．
+    """
+    top = lay["header_y_max"]
+    raw = [l for b in page.get_text("dict")["blocks"] if b["type"] == 0 for l in b["lines"]]
+    caps = []
+    for l in raw:
+        if l["bbox"][3] > top or tuple(round(v) for v in l["dir"]) != (1, 0):
+            continue
+        spans = [s for s in l["spans"] if s["text"].strip()]
+        if not spans:
+            continue
+        ml = make_line(spans, lay)
+        if cap_font(ml, lay) and cap_match(ml["text"], lay):
+            caps.append(ml)
+    for cap in sorted(caps, key=lambda l: l["y0"]):
+        below = [l["bbox"] for l in raw if l["bbox"][1] >= cap["y1"] - 1]
+        below += [d["rect"] for d in page.get_drawings() if d["rect"].y0 >= cap["y1"] - 1]
+        if not any(r[1] - cap["y1"] < cap["size"] * 2 for r in below):
+            continue
+        out = dict(lay, header_y_max=cap["y0"] - 1, footer_y_min=page.rect.height + 1)
+        if abs(page.rect.width - width0) > 1 and "text_x1" in lay:
+            out["text_x1"] = lay["text_x1"] + page.rect.width - width0
+        REPORT.append(f"p{page.number + 1}: 柱の範囲に「{cap['text'].strip()[:20]}」があり，下に表か図が続くので，"
+                      "このページは柱の無い図表のページとみた (柱・脚注の範囲を外した)．確かめる")
+        return out
+    return lay
+
+
 def make_line(spans, lay, direction=(1, 0)):
     x0 = min(s["bbox"][0] for s in spans)
     y0 = min(s["bbox"][1] for s in spans)
@@ -1223,11 +1258,13 @@ def main():
             md.extend(pending_floats.pop(0))
             md.append("")
 
+    width0 = statistics.median(p.rect.width for p in doc)   # ふつうのページの幅
     for page in doc:
         pno = page.number + 1
         page.get_pixmap(dpi=args.dpi_page).save(out / "pages" / f"p{pno:03d}.png")
         mid = page.rect.width / 2
-        lines = page_lines(page, lay)
+        play = page_layout(page, lay, width0)   # 柱の無い図表のページ (折り込みの表) だけ，柱・脚注の範囲を改める
+        lines = page_lines(page, play)
 
         if not started:
             # 最初の大見出しより上 (題・著者・要旨) は page1.txt へ．本文は見出しの 1.5 行上から
@@ -1259,7 +1296,7 @@ def main():
             if close_at and (column_of(l, mid), l["y0"]) >= close_at and not is_h1(l):
                 return False
             return is_body(l) or refs_here and near(l["size"], lay["ref_size"], tol)
-        clusters = [sub for c in float_regions(page, lines, lay, is_body_page) for sub in split_by_captions(c, lay)]
+        clusters = [sub for c in float_regions(page, lines, play, is_body_page) for sub in split_by_captions(c, lay)]
         caps = {id(c): caption_of(c, lay) for c in clusters}
         attach_side_figures(clusters, caps)
         grow_tables(clusters, caps)

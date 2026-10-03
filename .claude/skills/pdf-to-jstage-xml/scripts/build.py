@@ -863,6 +863,11 @@ def auto_citations(text, refs, where):
     return "".join(out)
 
 
+# 図の枝番の大文字 (「Fig. 3A」「Figs. 3A, B, 4」の A・B)．枝番の字はリンクの外に文字で置き，
+# その後ろに続く番号 (4) もリンクする (35(1):49)．小文字の「1a」は群落の下位単位のことがあるので含めない
+PANEL = r"(?:[A-Z](?![A-Za-z])(?:\s*[,，]\s*[A-Z](?![A-Za-z]))*)?"
+
+
 def link_floats(text, floats):
     """「図1」「表1」を図表へのリンクにする．「図2，3，4」「図3, 4」の2つ目以降の番号もリンクする．
 
@@ -893,24 +898,25 @@ def link_floats(text, floats):
 
     def rep(m):
         kind = m.group(1)
-        out = one(kind, m.group(3), m.group(1) + m.group(2) + m.group(3))
-        rest, prev = m.group(4), int(m.group(3))
-        for mm in re.finditer(r"(\s*(?:[，,、]|and|&|＆|[-–−~〜～])\s*)(\d+)", rest):
+        out = one(kind, m.group(3), m.group(1) + m.group(2) + m.group(3)) + (m.group(4) or "")
+        rest, prev = m.group(5), int(m.group(3))
+        for mm in re.finditer(r"(\s*(?:[，,、]|and|&|＆|[-–−~〜～])\s*)(\d+)(" + PANEL + ")", rest):
             # 「図6-1」「図6-2」「Fig. 4-2」は図の枝番で，範囲ではない (22(1):25・21(2):89)．範囲 (Table 1-4) なら
             # 後ろの番号のほうが大きい．枝番から後ろはそのままの文字で残す
             if re.fullmatch(r"\s*[-–−]\s*", mm.group(1)) and int(mm.group(2)) <= prev:
                 return out + rest[mm.start():]
-            out += mm.group(1) + one(kind, mm.group(2), mm.group(2))
+            out += mm.group(1) + one(kind, mm.group(2), mm.group(2)) + mm.group(3)
             prev = int(mm.group(2))
         return out
     # 「地表0 cm」「数値地図50 m」「代表」「発表」「公表」の「表」「図」は図表の参照ではない (22(2):135・103)
     text = re.sub(r"(付表|付図|写真|Photos|Photo|(?<![地代発公])図|(?<![地代発公])表|Figs\.|Fig\.|Figures|Figure|Figs|Fig"
-                  r"|Tables|Table|Tabs\.|Tab\.)(\s*)(\d+)"
+                  r"|Tables|Table|Tabs\.|Tab\.)(\s*)(\d+)(" + PANEL + ")"
                   # 「Fig. 4, 1a」の「1a」のように英字が続くものは番号の続きではない
                   # (Fig. 4 の中の群落 1 の下位単位 a を指す．17(2):55)
                   # 「Table 1-4」「図1〜3」のように範囲で引くこともある (20(2):119)．
                   # 終わりの番号もリンクしないと，途中の図表が参照なしになる
-                  r"((?:\s*(?:[，,、]|and|&|＆|[-–−~〜～])\s*\d+(?![\d.A-Za-z]))*)", rep, text)
+                  # 文末の「Figs. 2 and 3.」の 3 もリンクする．除くのは小数 (「2.5」) だけ (35(1):49)
+                  r"((?:\s*(?:[，,、]|and|&|＆|[-–−~〜～])\s*\d+" + PANEL + r"(?![\dA-Za-z]|\.\d))*)", rep, text)
     # 番号の無い呼び名 (「付表」だけの枠) は，本文の「（付表）」「付表に示した」をその呼び名で引く
     # (22(1):25・22(2):113)．番号が続くもの (付表1) は上で扱う
     bare = {}

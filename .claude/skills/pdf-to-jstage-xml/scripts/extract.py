@@ -713,6 +713,32 @@ def has_content(c, cap):
     return not r.is_empty and r.get_area() > max(1500, cap["cap_rect"].get_area())
 
 
+def appendix_figure(c, cap):
+    """付表が図 (グラフなどの画像) なら，図の印 ("fig") を付けたまとまりと，図題の続きにする説明の文を返す．
+
+    付表は表として扱う (cap_match) が，中身が画像のもの (34(1):1 の Appendix 2・3．種数-面積曲線のグラフ) は図にする．
+    中身 (図題を除く) の 3 割以上を画像 (ラスタ) が占めるとき図とみる (表の付表は文字と線だけで，画像は無い)．
+    画像の下に段の幅に近い文の行があれば (Appendix 2 の調べ方の説明)，そこから後ろを画像から外し，図題の続きにする．
+    """
+    imgs = [e[1] for e in c["elems"] if e[0] == "img"]
+    whole = content_rect(c, cap)
+    if not imgs or sum(r.get_area() for r in imgs) < whole.get_area() * 0.3:
+        return c, ""
+    bottom = max(r.y1 for r in imgs)
+    width = max(r.width for r in imgs)
+    below = sorted((e for e in c["elems"] if e[0] == "text" and not e[2].get("cap") and e[1].y0 >= bottom - 1),
+                   key=lambda e: (e[1].y0, e[1].x0))
+    start = next((k for k, e in enumerate(below) if e[1].width >= width * 0.8), None)
+    note = below[start:] if start is not None else []
+    text = ""
+    for e in note:
+        text = join(text, e[2]["md"])
+    out = {"rect": c["rect"], "elems": [e for e in c["elems"] if not any(e is n for n in note)], "fig": True}
+    REPORT.append(f"{cap['label']}: 中身が画像なので図の付表とみた (:::fig)"
+                  + (f"．画像の下の文 {len(note)} 行を図題の続きにした" if note else "") + "．確かめる")
+    return out, text.strip()
+
+
 def grow_figure(clusters, caps, c, cap):
     """図の中身のすぐ上 (または横) に，間の空いた図題の無いまとまりがあれば合わせる．
 
@@ -1317,6 +1343,11 @@ def main():
                 orphans.append(c)
                 continue
             kind, num, appx = cap["kind"], cap["num"], cap["appx"]
+            app_note = ""
+            if appx:
+                c, app_note = appendix_figure(c, cap)
+                if c.get("fig"):
+                    kind = "fig"
             fig_count[kind] += 1
             stem = "appendix" if appx else kind
             key = f"{stem}{num}"
@@ -1331,14 +1362,17 @@ def main():
                 feet[key] = foot
             sub, name = ("figs" if kind == "fig" else "tables"), f"{stem}{num}.png"
             page.get_pixmap(dpi=args.dpi_fig if kind == "fig" else 200, clip=clip).save(out / IMG[sub] / name)
-            captions[key] = strip_label(cap["text"], lay)
+            captions[key] = join(strip_label(cap["text"], lay), app_note) if app_note else strip_label(cap["text"], lay)
             rows = [(l["y0"], l["x0"], l["md"]) for l in lines if l.get("cap") and cap["cap_rect"].intersects(
                 pymupdf.Rect(l["x0"], l["y0"], l["x1"], l["y1"]))]
             last_float = {"kind": kind, "num": num, "parts": 1, "page": pno, "rect": content, "stem": key,
                           "cap_rows": rows, "key": key, "cap_size": cap["line"]["size"],
                           "cap_dir": cap["line"].get("dir", (1, 0))}
             seen_floats[(kind, num, appx)] = last_float
-            if appx:
+            if appx and kind == "fig":
+                # 図の付表 (グラフの画像)．図の番号は本文の図の後ろの続き番号 (最後に振る)
+                appendix_floats.append([f":::fig F@@APPFIG@@ {cap['label']} {name}", f"@@CAP {key}@@", ":::"])
+            elif appx:
                 appendix_floats.append([f":::table TA{num} {cap['label']}", f"@@CAP {key}@@", "@image", f"@@FOOT {key}@@", ":::"])
             elif kind == "fig":
                 pending_floats.append([f":::fig F{num} {cap['label']} {name}", f"@@CAP {key}@@", ":::"])
@@ -1351,7 +1385,8 @@ def main():
                                        f"@@FOOT {key}@@",   # 表の脚注 (table-wrap-foot)．無ければ消す
                                        ":::"])
             REPORT.append(f"p{pno}: {key} の枠 {tuple(round(v) for v in clip)}"
-                          + (f" → tables/{name} (付表．枠は TA{num})" if appx else ""))
+                          + (f" → {sub}/{name} (付表．枠は {'図 (F は本文の図の続き番号)' if kind == 'fig' else f'TA{num}'})"
+                             if appx else ""))
         if orphans and last_float:
             # キャプションの無いまとまりは1つに合わせる (表の中の散らばった字が別々のまとまりになるため)．
             # 直前の図表の次のページの上端にあるか，大きければ，その図表の続き
@@ -1427,7 +1462,11 @@ def main():
         special = {t for k in ("ack", "abstract", "refs") for t in as_list(prof["sections"].get(k, []))}
         at = next((i for i, l in enumerate(md) if l.startswith("# ") and l[2:].strip() in special), len(md))
         block = ["<!-- 付表 (紙面では引用文献の後ろ)．本文の末尾に置いた．必要なら初めて引くところへ移す -->", ""]
+        nfig = max((int(m.group(1)) for l in md for m in [re.match(r":::fig F(\d+) ", l)] if m), default=0)
         for f in appendix_floats:
+            if "@@APPFIG@@" in f[0]:
+                nfig += 1
+                f = [f[0].replace("@@APPFIG@@", str(nfig))] + f[1:]
             block += f + [""]
         md[at:at] = block
 

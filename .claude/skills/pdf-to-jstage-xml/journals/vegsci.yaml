@@ -72,7 +72,8 @@ layout:
   heading2_size: 9.9        # 「水田面積の変遷と歴史性」(ゴシック体・本文と同じ大きさ)
   italic_font: Ital         # この文字列を含む書体は *斜体* にする．太字の斜体は書体名が途切れて
                             # 「TimesNewRomanPS-BoldItal」になる (35 巻の学名) ので「Italic」では当たらない
-  caption_pattern: '^(図|表|Fig\.?|Table)\s*(\d+)'   # 「Fig 6.」と点の無い図題もある (34(1):39)
+  caption_pattern: '^(図|表|Fig\.?|Table|Tabel)\s*(\d+)'   # 「Fig 6.」と点の無い図題もある (34(1):39)．
+                            # 「Tabel 2.」は 33(2):65 の原文の綴りの誤り (拾わないと表1 の表題の続きになる)
   # 付表の題 (引用文献の後ろに続く組成表など)．番号の無い「付表」(31(2):179) は 1 とみる．
   # 枠は TA1，画像は appendix1.png (extract_scan.py と同じ)．文献の節もここで終える
   appendix_pattern: '^(付表|Appendix|APPENDIX)\s*(\d*)'

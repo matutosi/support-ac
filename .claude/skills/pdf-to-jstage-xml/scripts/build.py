@@ -87,11 +87,11 @@ def inline(s):
 
 # ================================================================ 引用文献
 
-ORG = re.compile(r"(財団|協会|学会|省|庁|局|課|県|市|町|村役場|研究所|委員会|センター|会議|組合|機構|グループ|調査団|"
+ORG = re.compile(r"(財団|協会|学会|省|庁|局|課|県|市|町|村役場|研究所|委員会|センター|会議|組合|機構|グループ|ネットワーク|調査団|"
                  r"Ministry|Society|Agency|Institute|Committee|Council|Association)")
 
 
-ORG_END = re.compile(r"(財団|協会|学会|省|庁|局|課|部|室|県|市|町|村|研究所|委員会|センター|会議|組合|機構|グループ|調査団|"
+ORG_END = re.compile(r"(財団|協会|学会|省|庁|局|課|部|室|県|市|町|村|研究所|委員会|センター|会議|組合|機構|グループ|ネットワーク|調査団|"
                      r"編|ほか)$")
 
 
@@ -111,8 +111,9 @@ def split_ja_names(auth):
     pieces = [x.strip() for x in whole.split("・") if x.strip()]
     # ただし「北海道千歳市・たくぎん総合研究所」のように，前の部分がそれだけで団体として
     # 完結しているときは，2つの団体なので分ける (18(2):107 の B6)
+    # 空白を含む部分も，空白を除いて 8 字以上なら人名とみない (「中西　哲博士追悼植物生態・分類論文集編集委員会」．36(1):1 の B16)
     if (len(pieces) > 1 and ORG_END.search(whole)
-            and not any(re.search(r"[\s　]", x) or len(x) <= 4 for x in pieces)
+            and not any((re.search(r"[\s　]", x) and len(re.sub(r"[\s　]", "", x)) <= 7) or len(x) <= 4 for x in pieces)
             and not any(ORG_END.search(x) for x in pieces[:-1])):
         return [(0, len(auth.rstrip("．.，,")))]
     parts, pos = [], 0

@@ -79,7 +79,8 @@ def inline(s):
     s = re.sub(r"(?<=[0-9])\*([A-Za-z]{1,2})\*(?![A-Za-z0-9_*])", r"<italic>\1</italic>", s)
     s = re.sub(r"\^([^^\s][^^]*?)\^", r"<sup>\1</sup>", s)
     s = re.sub(r"(?<![~〜])~([^~\s][^~]*?)~(?!~)", r"<sub>\1</sub>", s)
-    s = re.sub(r"(https?://[A-Za-z0-9._~:/?#\[\]@!$&'()*+;=%-]+?)(?=[，,。．、）)\s]|[^\x00-\x7f]|$|\.(?:\s|$))",
+    # 引用の区切りの「;」(「…/rdb.html; 岐阜県」) は URL に入れない．後ろが空白か行末の「;」で終わりにする (36(1):1)
+    s = re.sub(r"(https?://[A-Za-z0-9._~:/?#\[\]@!$&'()*+;=%-]+?)(?=[，,。．、）)\s]|[^\x00-\x7f]|$|[.;](?:\s|$))",
                lambda m: f'<ext-link ext-link-type="uri" xlink:href="{m.group(1)}">{m.group(1)}</ext-link>', s)
     return s.replace("\x00", "*").replace("\x0e", "~")
 

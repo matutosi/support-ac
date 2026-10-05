@@ -505,6 +505,11 @@ BOOK_TAIL = re.compile(r"\s*(?P<pub>[^.．,，「」\s][^.．,，「」]*?"
                        r"(?:\s*[,，]\s*(?:[A-Z][.．]\s*(?:[A-Z][.．])?|[A-Z]{2}))?)\s*[.．]?\s*$")
 
 
+def in_url(text, pos):
+    """text の pos 文字目が URL (http://… の空白までの範囲) の中にあるか．"""
+    return any(m.start() < pos < m.end() for m in re.finditer(r"https?://\S+", text))
+
+
 class Ref:
     def __init__(self, idx, text):
         self.id = f"B{idx}"
@@ -557,6 +562,10 @@ class Ref:
         rest = m.group("rest")
         jm = JOURNAL_TAIL.search(rest)
         bm = BOOK_TAIL.search(rest)
+        # 出版社・所在地を URL の途中から切り出さない
+        # (「URL; https://CRAN.R-project.org (accessed on …)」の org 以降を出版社にしていた．37(2):101)
+        if bm and in_url(rest, bm.start("pub")):
+            bm = None
         cm = ((CHAPTER_JA.match(rest) or CHAPTER_JA2.match(rest) or ja3(rest))
               if self.lang == "ja"
               # 編者を括弧で後置する形を先に見る (CHAPTER_EN だと編者と書名が入れ替わるため)
@@ -594,7 +603,7 @@ class Ref:
                     + inline(esc(rest[bm.end("pub"):bm.start("loc")]))
                     + f"<publisher-loc>{plain_inline(esc(bm.group('loc')))}</publisher-loc>"
                     + inline(esc(rest[bm.end("loc"):])))
-        elif BOOK_PUB.search(rest) and not re.search(r"(In\s*:|編「|（編）|pp\.)", rest)                 and not NOT_PUB.search(BOOK_PUB.search(rest).group("pub").strip()):
+        elif BOOK_PUB.search(rest) and not in_url(rest, BOOK_PUB.search(rest).start("pub")) and not re.search(r"(In\s*:|編「|（編）|pp\.)", rest)                 and not NOT_PUB.search(BOOK_PUB.search(rest).group("pub").strip()):
             pm = BOOK_PUB.search(rest)
             self.kind = "book"
             main = rest[:pm.start()]

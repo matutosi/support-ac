@@ -543,7 +543,12 @@ class Ref:
         if self.lang == "en":
             tagged, names = tag_en_authors(auth)
             if tagged is None:  # 団体名など
-                tagged, names = f"<collab>{esc(auth)}</collab>", [auth]
+                # 末尾の区切りの「.」は名前に入れない (「R Core Team. 2015.」．36(1):1・37(2):85)．
+                # 「Inc.」「Ltd.」などの略記の点は名前の一部なので残す
+                core = auth.rstrip()
+                if core.endswith(".") and not re.search(r"(?:Inc|Ltd|Co|Corp|Univ|Dept|Assoc|St)\.$", core):
+                    core = core[:-1].rstrip()
+                tagged, names = f"<collab>{esc(core)}</collab>{esc(auth[len(core):])}", [core]
         else:
             spans = split_ja_names(auth)
             parts, pos = [], 0

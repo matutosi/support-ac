@@ -1787,7 +1787,7 @@ COUNTRIES = {"JP": ("日本", "Japan"), "NP": ("ネパール", "Nepal"), "US": (
              "ID": ("インドネシア", "Indonesia"), "MY": ("マレーシア", "Malaysia"),
              "VN": ("ベトナム", "Viet Nam"), "IN": ("インド", "India"),
              "CA": ("カナダ", "Canada"), "NZ": ("ニュージーランド", "New Zealand"),
-             "BR": ("ブラジル", "Brazil"), "MN": ("モンゴル", "Mongolia"),
+             "BR": ("ブラジル", "Brazil"), "MN": ("モンゴル", "Mongolia"), "KZ": ("カザフスタン", "Kazakhstan"),
              "NL": ("オランダ", "Netherlands"), "CH": ("スイス", "Switzerland"),
              "AT": ("オーストリア", "Austria"), "SE": ("スウェーデン", "Sweden"),
              "ES": ("スペイン", "Spain"), "IT": ("イタリア", "Italy")}

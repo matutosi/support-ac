@@ -98,6 +98,11 @@ ORG_END = re.compile(r"(財団|協会|学会|の会|省|庁|局|課|部|室|県|
                      r"編|ほか)$")
 
 
+# カタカナだけの短い部分は人名とみない (「サロベツ・エコ・ネットワーク」の「エコ」．39(1):43)．
+# 外国人の名のカタカナ書きは，団体の字で終わる全体の中には並ばない
+KATAKANA = re.compile(r"[ァ-ヶー－]+")
+
+
 def split_ja_names(auth):
     """「馬場多久男・伊藤精晤・田中　誠」→ 名前の (開始, 終了) の列．
 
@@ -116,7 +121,8 @@ def split_ja_names(auth):
     # 完結しているときは，2つの団体なので分ける (18(2):107 の B6)
     # 空白を含む部分も，空白を除いて 8 字以上なら人名とみない (「中西　哲博士追悼植物生態・分類論文集編集委員会」．36(1):1 の B16)
     if (len(pieces) > 1 and ORG_END.search(whole)
-            and not any((re.search(r"[\s　]", x) and len(re.sub(r"[\s　]", "", x)) <= 7) or len(x) <= 4 for x in pieces)
+            and not any((re.search(r"[\s　]", x) and len(re.sub(r"[\s　]", "", x)) <= 7)
+                        or (len(x) <= 4 and not KATAKANA.fullmatch(x)) for x in pieces)
             and not any(ORG_END.search(x) for x in pieces[:-1])):
         return [(0, len(auth.rstrip("．.，,")))]
     parts, pos = [], 0

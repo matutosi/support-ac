@@ -781,12 +781,12 @@ def author_matches(window, ref, raw=None):
 CITE_YEAR = re.compile(r"(?<![\d./:])((?:1[89]|20)\d{2})([a-z]?)(?![\d])")
 
 
-MANUAL = re.compile(r"\{\{(?:(?P<rid>B\d+)|(?P<key>[^|{}]+?)\s+(?P<year>(?:1[89]|20)\d{2}[a-z]?))"
+MANUAL = re.compile(r"\{\{(?:(?P<rid>B\d+)|(?P<fid>(?:TA|F|T)\d+)|(?P<key>[^|{}]+?)\s+(?P<year>(?:1[89]|20)\d{2}[a-z]?))"
                     r"\|(?P<shown>[^{}]+)\}\}")
 
 
 def link_citations(text, refs, where):
-    """AI が手で指定したリンク {{著者名の先頭 年|表示}}・{{B12|表示}} を先に処理し，残りを自動でリンクする．
+    """AI が手で指定したリンク {{著者名の先頭 年|表示}}・{{B12|表示}}・図表の {{F3|表示}} を先に処理し，残りを自動でリンクする．
 
     AI が手で指定するのは，原文の表記揺れで自動では当たらないとき
     (例: 本文「北海道環境科学センター（2005）」と文献「北海道環境科学研究センター 2005」)．
@@ -799,6 +799,12 @@ def link_citations(text, refs, where):
     for m in MANUAL.finditer(text):
         out.append(auto_citations(text[pos:m.start()], refs, where))
         shown = m.group("shown")
+        if m.group("fid"):
+            # 図表への手のリンク {{F3|3}}．「図1, 2, 3a」の 3a のように自動では拾えない形に使う (38(2):191)．
+            # 行き先が実在するかは図表のリンクを組むときに見る
+            out.append(f"{m.group('fid')}{shown}")
+            pos = m.end()
+            continue
         if m.group("rid"):
             hit = [by_id[m.group("rid")]] if m.group("rid") in by_id else []
         else:

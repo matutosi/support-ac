@@ -35,6 +35,8 @@ J-STAGE の論文の一覧の取得と，論文 PDF から全文 XML を作る�
 
 ## 決めごと
 
+- **【決定 2026-10-01・ユーザ指示】worktree で作業したら，指示が無くても main へ merge する**
+  (「指示なくても merge」．号ごとに「merge」「merge push」を 20 回近く打たせていたため)．
 - **入力は Excel** で受け取る (書式は README に記載)．書式を変えたら README も直す．
 - 依存パッケージは `requirements.txt` で版を固定する (PyMuPDF・reportlab・pdfrw・streamlit など)．
 - **入口の `*_web.py` 3本は直下から動かさない**．Streamlit Cloud の公開アプリ (README の3つ) と

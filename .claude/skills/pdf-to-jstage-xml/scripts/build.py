@@ -91,7 +91,7 @@ ORG = re.compile(r"(財団|協会|学会|省|庁|局|課|県|市|町|村役場|�
                  r"Ministry|Society|Agency|Institute|Committee|Council|Association)")
 
 
-ORG_END = re.compile(r"(財団|協会|学会|省|庁|局|課|部|室|県|市|町|村|研究所|委員会|センター|会議|組合|機構|グループ|ネットワーク|調査団|"
+ORG_END = re.compile(r"(財団|協会|学会|の会|省|庁|局|課|部|室|県|市|町|村|研究所|委員会|センター|会議|組合|機構|グループ|ネットワーク|調査団|気象台|"
                      r"編|ほか)$")
 
 

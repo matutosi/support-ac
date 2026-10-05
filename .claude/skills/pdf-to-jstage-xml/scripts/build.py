@@ -887,6 +887,10 @@ def link_floats(text, floats):
 
     def one(kind, num, shown):
         key = by_label.get(re.sub(r"[\s　.．]", "", unicodedata.normalize("NFKC", kind + num)).lower())
+        if key is None and kind in ("付表", "付図"):
+            # 付表・付図は付録の枠 (TA・FA) だけを探す．枠が無い (電子付録で PDF に無い) のに
+            # 同じ番号の表・図へリンクしていた (37(1):49 の「付表1」→ 表1)
+            key = ("FA" if kind == "付図" else "TA") + num
         if key is None:      # 呼び名で引けないときは番号で引く (図/Fig. → F，表/Table → T)
             key = ("F" if kind in ("図", "写真") or kind.startswith(("Fig", "Photo")) else "T") + num
         if key not in floats:

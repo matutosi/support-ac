@@ -17,3 +17,4 @@ jstage/work/
 # preview_tool: 見本 (J-STAGE から保存したページ・CSS・記事ダウンロード) と生成したプレビュー
 jstage/preview_tool/_sample/
 jstage/preview_tool/out/
+.claude/settings.local.json

@@ -21,9 +21,9 @@ J-STAGE の論文の一覧の取得と，論文 PDF から全文 XML を作る�
   - `backup.md` … **J-STAGE の現状の控え方** (編集登載システムの「記事ダウンロード」を使う)
   - `pdf_to_jstage_xml.md` … PDF を J-STAGE 用の XML にする方法の調査
   - `requirements.txt` … J-STAGE 関係の依存 (直下のものとは分けてある)
-  - `preview_tool/` … 全文 XML の zip から J-STAGE の全文 HTML に似せたプレビューを手元で作る (`preview.py`)．
-    `compare.py` で J-STAGE が作った全文 HTML (記事ダウンロードの zip の `<記事識別子>.html`) と比べられる．
-    見本 `_sample/` と出力 `out/` は追跡しない．使い方は `preview_tool/README.md`
+  - ~~`preview_tool/`~~ … **2026-10-11 に matutosi-skills の jstage-xml プラグイン (`scripts/preview_tool/`) へ移した** (ユーザ指示．リンクのみ．
+    https://github.com/matutosi/matutosi-skills/tree/main/plugins/jstage-xml)．出力は `<作業の根>/_preview/`．
+    見本 `jstage/preview_tool/_sample/` (追跡しない) は手元に残した．プラグインは `<作業の根>/_sample/` と自分の `_sample/` から CSS を探す
   - `work/<巻>/<開始ページ>/` … スキルの作業ディレクトリ (追跡しない．開始ページは 3 桁: `13/001/`)．論文の PDF もこの中に置く．
     出力は `out/` (XML と対応表 `manifest.json`) と `<記事識別子>.zip` だけ．
     **2026-09-29 に `jstage/work/` の中身 (21・24〜26 巻の作業ディレクトリ，控え `_backup/` 318 本，登載用の zip `_bundle/` 165 本，`_sample/`) を
@@ -148,7 +148,7 @@ J-STAGE の論文の一覧の取得と，論文 PDF から全文 XML を作る�
 
 - 2026-10-11 07:14 (このセッション，MATUTOSI_DP)
   **J-STAGE 全文 XML のスキルを matutosi-skills の `jstage-xml` プラグインへ移した** (ユーザ指示．二重管理しない)．
-  `.claude/skills/pdf-to-jstage-xml/` と `jstage/` の `article_ids.py`・`pdf_fingerprint.py`・`list_articles.py` を消し，README と CLAUDE.md にリンクを残した．
+  `.claude/skills/pdf-to-jstage-xml/` と `jstage/` の `article_ids.py`・`pdf_fingerprint.py`・`list_articles.py` を消し，README と CLAUDE.md にリンクを残した． 続けてプレビューの道具 `jstage/preview_tool/` も移した (jstage-xml 0.2.0)．
 
 - 2026-10-06 09:43 (このセッション，MATUTOSI_DP)
   **42(2) の 5 本 (和文の原著 3・和文の短報 2) の全文 XML を控えから作り，24 巻以降の控えから作る分がすべて済んだ** (ユーザ指示)．5 本とも DTD 妥当・規則のエラー 0・注意 0．`_bundle/42_2/rev_<記事識別子>.zip`．A・B (採ったもの) は 0．

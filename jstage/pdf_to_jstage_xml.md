@@ -156,7 +156,7 @@ J-STAGE の登載代行・全文 XML 作成は印刷会社などが請け負っ�
 ## 7. 決まったこと とスキル化 (2026-09-19)
 
 6 節への答え: **対象は植生学会誌の論文 (全文 XML)．原稿は無く PDF から作る**．
-これに合わせて，スキル **`congress_vs/.claude/skills/pdf-to-jstage-xml/`** を作った (2026-09-19 に **`support-ac/.claude/skills/pdf-to-jstage-xml/`** へ移した)．
+これに合わせて，スキル **`congress_vs/.claude/skills/pdf-to-jstage-xml/`** を作った (のち support-ac へ，2026-10-11 に [matutosi-skills の jstage-xml](https://github.com/matutosi/matutosi-skills/tree/main/plugins/jstage-xml) へ移した) (2026-09-19 に **`support-ac/.claude/skills/pdf-to-jstage-xml/`** へ移した)．
 使い方は同ディレクトリの `SKILL.md`．
 
 - 方式: 全文 XML 作成ツールで docx から変換するのではなく，**JATS 1.1 の XML を直接組み，

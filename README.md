@@ -16,7 +16,6 @@ assets/         フォント・印影・名簿の見本 (名簿・領収書.xlsx
 output/         生成した PDF・PNG (git では追跡しない)
 form/           申込フォーム (Google Apps Script)
 jstage/         J-STAGE 関係 (論文の一覧・全文 XML の調査・作業ディレクトリ)
-.claude/skills/pdf-to-jstage-xml/   論文 PDF から全文 XML を作る Claude Code のスキル
 ```
 
 ## ライブラリのインストール
@@ -162,22 +161,23 @@ pip install -r jstage/requirements.txt
 
 ### 論文の一覧
 
-jstage/list_articles.py
-
-J-STAGE から学会誌の論文の一覧を取ります．
+J-STAGE から学会誌の論文の一覧を取る `list_articles.py` は，
+[matutosi-skills の jstage-xml プラグイン](https://github.com/matutosi/matutosi-skills/tree/main/plugins/jstage-xml) の `scripts/` へ移しました (2026-10-11)．
 
 ```
 # 号の目次 (記事種別・題名・著者・書誌) を表示する
-python jstage/list_articles.py toc vegsci 41 2
+python <jstage-xml の scripts>/list_articles.py toc vegsci 41 2
 # サイト用の論文リスト (<li> の HTML) を出す．--vol・--no で絞れる
-python jstage/list_articles.py html --lang ja --out list_ja.html
-python jstage/list_articles.py html --lang en --out list_en.html
+python <jstage-xml の scripts>/list_articles.py html --lang ja --out list_ja.html
+python <jstage-xml の scripts>/list_articles.py html --lang en --out list_en.html
 ```
 
 ### 論文 PDF から全文 XML を作る
 
 Claude Code のスキル pdf-to-jstage-xml を使います．
-手順は .claude/skills/pdf-to-jstage-xml/SKILL.md，調査のまとめは jstage/pdf_to_jstage_xml.md にあります．
+**スキルは [matutosi-skills の jstage-xml プラグイン](https://github.com/matutosi/matutosi-skills/tree/main/plugins/jstage-xml) へ移しました** (2026-10-11．ここには置いていません)．
+入れ方は `/plugin marketplace add matutosi/matutosi-skills` → `/plugin install jstage-xml@matutosi-skills` です．
+手順は [SKILL.md](https://github.com/matutosi/matutosi-skills/tree/main/plugins/jstage-xml/skills/pdf-to-jstage-xml/SKILL.md)，調査のまとめは jstage/pdf_to_jstage_xml.md にあります．
 作業ディレクトリは jstage/work/<巻>/<開始ページ>/ です (開始ページは 3 桁．例: jstage/work/13/001/．git では追跡しない)．
 論文の PDF はその中に <記事識別子>.pdf として置きます (新しい号は <巻>_<開始ページ>，旧号は 13_KJ00006916281 のような形)．
 登載用の一式は <記事識別子>.zip にまとめられます (J-STAGE が求めるフォルダの入れ子は zip の中にだけ作ります)．

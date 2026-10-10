@@ -17,7 +17,7 @@ J-STAGE の論文の一覧の取得と，論文 PDF から全文 XML を作る�
 - `output/` … 生成した PDF・PNG (追跡しない)
 - `form/` … 申込フォーム (`create_form.gs`・`form_questions.csv`)
 - `jstage/` … J-STAGE 関係
-  - `list_articles.py` … 号の目次 (`toc`) とサイト用の論文リスト (`html`)
+  - ~~`list_articles.py`~~ … **2026-10-11 に matutosi-skills の jstage-xml プラグインへ移した** (号の目次 `toc` とサイト用の論文リスト `html`．https://github.com/matutosi/matutosi-skills/tree/main/plugins/jstage-xml)
   - `backup.md` … **J-STAGE の現状の控え方** (編集登載システムの「記事ダウンロード」を使う)
   - `pdf_to_jstage_xml.md` … PDF を J-STAGE 用の XML にする方法の調査
   - `requirements.txt` … J-STAGE 関係の依存 (直下のものとは分けてある)
@@ -29,7 +29,9 @@ J-STAGE の論文の一覧の取得と，論文 PDF から全文 XML を作る�
     **2026-09-29 に `jstage/work/` の中身 (21・24〜26 巻の作業ディレクトリ，控え `_backup/` 318 本，登載用の zip `_bundle/` 165 本，`_sample/`) を
     `D:/matu/workOLD/Done/support-ac/jstage/work/` へ移した** (ユーザ指示．1.9G)．リポジトリの `jstage/work/` はもう無い．
     **今後の出力 (作業ディレクトリ・`_bundle`) も移した先に作る** (下の決めごと)
-- `.claude/skills/pdf-to-jstage-xml/` … 論文 PDF から J-STAGE の全文 XML を作るスキル (手順は `SKILL.md`)
+- ~~`.claude/skills/pdf-to-jstage-xml/`~~ … **2026-10-11 に matutosi-skills の jstage-xml プラグインへ移した** (ユーザ指示．二重管理しないので，ここからは消した．リンクのみ．https://github.com/matutosi/matutosi-skills/tree/main/plugins/jstage-xml)．
+  `jstage/article_ids.py`・`pdf_fingerprint.py`・`list_articles.py` も一緒に移した．対応表 `jstage/article_ids.csv` はここに残した
+  (プラグインの `article_ids.py` は作業の根 = 環境変数 `JSTAGE_ROOT`．無ければいまのディレクトリ，の `article_ids.csv` を読む．ここの表を使うなら `jstage/` で動かす)
 - `data/adress.txt` … 植生学会第30回大会の領収書の文面の控え (実際の値なので追跡しない)
 - `requirements.txt` … web アプリの依存 (版を固定してある．Streamlit Cloud が使う)
 
@@ -48,6 +50,9 @@ J-STAGE の論文の一覧の取得と，論文 PDF から全文 XML を作る�
 - PDF 操作の汎用部分は [easypdf](../easypdf) と重なる．直すときは両方の整合を確認する．
 
 ### J-STAGE の全文 XML 化 (スキル `pdf-to-jstage-xml`)
+
+**【2026-10-11 ユーザ指示】スキルは matutosi-skills の jstage-xml プラグインへ移した** (呼ぶときは `/jstage-xml:pdf-to-jstage-xml`)．
+下の決めごとは植生学会誌の作業のもので，スキルの手順そのものはプラグインの SKILL.md が正．
 
 2026-09-19 に congress_vs から移した決めごと．
 
@@ -140,6 +145,10 @@ J-STAGE の論文の一覧の取得と，論文 PDF から全文 XML を作る�
 ## 進捗状況
 
 ### 現在の状態
+
+- 2026-10-11 07:14 (このセッション，MATUTOSI_DP)
+  **J-STAGE 全文 XML のスキルを matutosi-skills の `jstage-xml` プラグインへ移した** (ユーザ指示．二重管理しない)．
+  `.claude/skills/pdf-to-jstage-xml/` と `jstage/` の `article_ids.py`・`pdf_fingerprint.py`・`list_articles.py` を消し，README と CLAUDE.md にリンクを残した．
 
 - 2026-10-06 09:43 (このセッション，MATUTOSI_DP)
   **42(2) の 5 本 (和文の原著 3・和文の短報 2) の全文 XML を控えから作り，24 巻以降の控えから作る分がすべて済んだ** (ユーザ指示)．5 本とも DTD 妥当・規則のエラー 0・注意 0．`_bundle/42_2/rev_<記事識別子>.zip`．A・B (採ったもの) は 0．

@@ -66,7 +66,7 @@ with settings:
         "大会支援株式会社  東京営業所内\n"
         "TEL: 03-0000-0000\n"
         "FAX: 03-0000-0000\n"
-        "E-mail: shien@info.com\n",
+        "E-mail: shien@example.com\n",
         height=180,
         help="最大8行まで入力可能"
     ).split("\n")

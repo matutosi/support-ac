@@ -177,7 +177,7 @@ if __name__ == "__main__":
         "大会支援株式会社  東京営業所内",
         "TEL: 03-0000-0000",
         "FAX: 03-0000-0000",
-        "E-mail: shien@info.com"
+        "E-mail: shien@example.com"
         ]
     CONSTANT_STRINGS = (TITLE, CONGRESS, COMMITTEE_SUB, PRESIDENT, RECEIPT_DATE, FOOTER_1, FOOTER_2)
 

@@ -18,3 +18,5 @@ jstage/work/
 jstage/preview_tool/_sample/
 jstage/preview_tool/out/
 .claude/settings.local.json
+# 手元の作業記録 (手元のパス・PC 名を含むので公開しない．2026-10-11)
+.claude/
